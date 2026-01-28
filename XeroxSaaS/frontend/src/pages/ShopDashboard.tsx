@@ -15,6 +15,7 @@ const ShopDashboard = () => {
   const [shop, setShop] = useState<any>(null);
   const [stats, setStats] = useState({ pending: 0, printed: 0, revenue: 0 });
   const [socket, setSocket] = useState<any>(null);
+  const [activeTab, setActiveTab] = useState<'active' | 'history'>('active');
   
   // UI States
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
@@ -80,17 +81,21 @@ const ShopDashboard = () => {
     if (!previewUrl) return;
     
     if (previewType === 'pdf') {
-      // Open PDF in new tab - Browser's native PDF viewer has the best Print UX
       window.open(previewUrl, '_blank');
     } else {
-      // For Images, create a print-ready popup
       const printWindow = window.open('', '_blank', 'width=800,height=600');
       if (printWindow) {
         printWindow.document.write(`
           <html>
-            <head><title>Print Document</title></head>
-            <body style="margin:0; display:flex; justify-content:center; align-items:center;">
-              <img src="${previewUrl}" style="max-width:100%; max-height:100vh;" onload="window.print(); window.close();" />
+            <head>
+              <title>Print Document</title>
+              <style>
+                body { margin: 0; display: flex; justify-content: center; align-items: center; height: 100vh; }
+                img { max-width: 100%; max-height: 100%; object-fit: contain; }
+              </style>
+            </head>
+            <body>
+              <img src="${previewUrl}" onload="setTimeout(() => { window.print(); window.close(); }, 500);" />
             </body>
           </html>
         `);
@@ -103,7 +108,6 @@ const ShopDashboard = () => {
     fetchShopDetails();
     fetchOrders();
 
-    // Socket.io Connection
     const newSocket = io('http://localhost:5000');
     setSocket(newSocket);
 
@@ -155,22 +159,29 @@ const ShopDashboard = () => {
     }
   };
 
+  const cancelOrder = async (orderId: string) => {
+    if (!window.confirm('Cancel this order? Refund will be recorded.')) return;
+    try {
+      await api.put(`/orders/${orderId}/cancel`);
+      const updatedOrders = orders.map(o => o._id === orderId ? { ...o, orderStatus: 'CANCELLED' } : o);
+      setOrders(updatedOrders);
+      updateStats(updatedOrders);
+      toast.success('Order Cancelled');
+    } catch (error) {
+      toast.error('Failed to cancel order');
+    }
+  };
+
   const [toggling, setToggling] = useState(false);
 
   const toggleStatus = async () => {
     if (toggling) return;
     setToggling(true);
     try {
-      console.log('Toggling status...');
       const { data } = await api.put('/shops/status');
-      console.log('New Status:', data.status);
-      
-      // Force refresh from server to ensure UI is 100% sync
       await fetchShopDetails(); 
-      
       toast.success(data.status === 'OPEN' ? 'Shop is now OPEN' : 'Shop is now CLOSED');
     } catch (e) { 
-      console.error(e);
       toast.error('Failed to toggle status'); 
     } finally {
       setToggling(false);
@@ -214,9 +225,23 @@ const ShopDashboard = () => {
     );
   };
 
+  const getUserColor = (id: string) => {
+    if (!id) return 'bg-slate-50';
+    let hash = 0;
+    for (let i = 0; i < id.length; i++) {
+      hash = id.charCodeAt(i) + ((hash << 5) - hash);
+    }
+    const h = Math.abs(hash) % 360;
+    return `hsl(${h}, 70%, 96%)`; // Very light pastel
+  };
+
+  const filteredOrders = orders.filter(o => {
+    if (activeTab === 'active') return ['QUEUED', 'PRINTING', 'READY'].includes(o.orderStatus);
+    return ['COMPLETED', 'CANCELLED'].includes(o.orderStatus);
+  });
+
   return (
     <div className="flex h-screen bg-slate-50 relative">
-      
       {/* Sidebar */}
       <aside className="w-64 bg-secondary text-white hidden md:flex flex-col">
         <div className="p-6 border-b border-slate-700">
@@ -247,15 +272,13 @@ const ShopDashboard = () => {
                  {user?.role === 'OWNER' && <span className="bg-purple-100 text-purple-700 px-2 py-1 rounded font-bold">OWNER</span>}
                </div>}
             </div>
-            {/* Mobile Logout */}
             <button onClick={() => { logout(); navigate('/login'); }} className="md:hidden text-slate-500 hover:text-red-500 p-2">
               <LogOut size={20} />
             </button>
           </div>
           
           <div className="flex gap-2 w-full md:w-auto overflow-x-auto pb-1 md:pb-0">
-             {/* Shop Status Toggle (Owner Only) */}
-             {user?.role === 'OWNER' && shop && (
+             {shop && (
                <button 
                  onClick={toggleStatus}
                  className={`flex items-center gap-2 px-3 py-1.5 md:px-4 md:py-2 rounded-lg font-bold transition-all text-xs md:text-sm whitespace-nowrap
@@ -267,17 +290,16 @@ const ShopDashboard = () => {
                </button>
              )}
              
-             {/* Add Employee (Owner Only) */}
-             {user?.role === 'OWNER' && (
-                <>
+             <>
                 <button onClick={() => setShowQR(true)} className="btn btn-outline flex items-center gap-2 text-xs md:text-sm whitespace-nowrap px-3 py-1.5 md:px-4 md:py-2">
                   <QrCode size={16} /> <span className="hidden sm:inline">QR Code</span>
                 </button>
-                <button onClick={() => setShowEmployeeModal(true)} className="btn btn-outline flex items-center gap-2 text-xs md:text-sm whitespace-nowrap px-3 py-1.5 md:px-4 md:py-2">
-                  <UserPlus size={16} /> <span className="hidden sm:inline">Staff</span>
-                </button>
-                </>
-             )}
+                {user?.role === 'OWNER' && (
+                  <button onClick={() => setShowEmployeeModal(true)} className="btn btn-outline flex items-center gap-2 text-xs md:text-sm whitespace-nowrap px-3 py-1.5 md:px-4 md:py-2">
+                    <UserPlus size={16} /> <span className="hidden sm:inline">Staff</span>
+                  </button>
+                )}
+             </>
 
              <button onClick={fetchOrders} className="p-2 text-slate-500 hover:text-primary-hover"><RefreshCw size={20}/></button>
           </div>
@@ -297,20 +319,36 @@ const ShopDashboard = () => {
             </div>
           </div>
 
-          {/* Orders Table */}
+          {/* Orders Table with Tabs */}
           <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-            <div className="p-6 border-b border-slate-100"><h3 className="font-bold text-lg">Live Orders</h3></div>
+            <div className="p-6 border-b border-slate-100 flex justify-between items-center">
+               <div className="flex gap-4">
+                  <button 
+                    onClick={() => setActiveTab('active')}
+                    className={`text-sm font-bold pb-1 border-b-2 transition-colors ${activeTab === 'active' ? 'text-primary border-primary' : 'text-slate-400 border-transparent hover:text-slate-600'}`}
+                  >
+                    Queue ({orders.filter(o => ['QUEUED', 'PRINTING', 'READY'].includes(o.orderStatus)).length})
+                  </button>
+                  <button 
+                    onClick={() => setActiveTab('history')}
+                    className={`text-sm font-bold pb-1 border-b-2 transition-colors ${activeTab === 'history' ? 'text-primary border-primary' : 'text-slate-400 border-transparent hover:text-slate-600'}`}
+                  >
+                    History
+                  </button>
+               </div>
+            </div>
+            
             <div className="overflow-x-auto">
               <table className="w-full text-left border-collapse">
                 <thead className="bg-slate-50 text-slate-500 text-xs uppercase font-semibold">
                   <tr><th className="p-4">Order ID</th><th className="p-4">Student</th><th className="p-4">Files & Config</th><th className="p-4">Status</th><th className="p-4">Action</th></tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {orders.length === 0 ? (
-                    <tr><td colSpan={5} className="p-8 text-center text-slate-400">No orders active.</td></tr>
+                  {filteredOrders.length === 0 ? (
+                    <tr><td colSpan={5} className="p-8 text-center text-slate-400">No {activeTab} orders.</td></tr>
                   ) : (
-                    orders.map((order) => (
-                      <tr key={order._id} className="hover:bg-slate-50 transition-colors">
+                    filteredOrders.map((order) => (
+                      <tr key={order._id} style={{ backgroundColor: getUserColor(order.user?._id) }} className="hover:brightness-95 transition-colors">
                         <td className="p-4 font-mono text-sm text-slate-500">#{order._id.slice(-6)}</td>
                         <td className="p-4 font-medium">{order.user?.name || 'Guest'}</td>
                         <td className="p-4">
@@ -346,9 +384,14 @@ const ShopDashboard = () => {
                         </td>
                         <td className="p-4">
                           {order.orderStatus === 'QUEUED' ? (
-                            <button onClick={() => markCompleted(order._id)} className="btn bg-slate-900 text-white hover:bg-slate-800 text-xs py-2 px-4 shadow-none flex items-center gap-2">
-                              <Printer size={16} /> Mark Done
-                            </button>
+                            <div className="flex gap-2">
+                              <button onClick={() => markCompleted(order._id)} className="btn bg-slate-900 text-white hover:bg-slate-800 text-xs py-2 px-4 shadow-none flex items-center gap-2">
+                                <Printer size={16} /> Print
+                              </button>
+                              <button onClick={() => cancelOrder(order._id)} className="btn bg-white text-red-500 border border-red-200 hover:bg-red-50 text-xs py-2 px-3 shadow-none" title="Cancel & Refund">
+                                <X size={16} />
+                              </button>
+                            </div>
                           ) : (
                             <span className="text-slate-400 text-sm">Archived</span>
                           )}

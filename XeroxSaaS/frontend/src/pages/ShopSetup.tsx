@@ -2,8 +2,8 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../services/api';
 import toast from 'react-hot-toast';
-import { Store, Loader2, Image as ImageIcon } from 'lucide-react';
-import { MapContainer, TileLayer, Marker, useMapEvents } from 'react-leaflet';
+import { Store, Loader2, Crosshair, UploadCloud, X } from 'lucide-react';
+import { MapContainer, TileLayer, Marker, useMapEvents, useMap } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
 
@@ -19,25 +19,62 @@ let DefaultIcon = L.icon({
 });
 L.Marker.prototype.options.icon = DefaultIcon;
 
-const LocationMarker = ({ setPos, pos }: { setPos: any, pos: [number, number] }) => {
+// Reverse Geocoding Helper
+const getAddressFromCoords = async (lat: number, lng: number) => {
+  try {
+    const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}`);
+    const data = await res.json();
+    return data.display_name;
+  } catch (e) {
+    return '';
+  }
+};
+
+const LocationMarker = ({ setPos, pos, setAddress }: { setPos: any, pos: [number, number], setAddress: any }) => {
+  const map = useMap();
+  
   useMapEvents({
-    click(e) {
+    async click(e) {
       setPos([e.latlng.lat, e.latlng.lng]);
+      const addr = await getAddressFromCoords(e.latlng.lat, e.latlng.lng);
+      if (addr) setAddress((prev: any) => ({ ...prev, address: addr }));
     },
   });
+
+  // Pan map if pos changes programmatically (e.g. locate me)
+  React.useEffect(() => {
+     map.flyTo(pos, map.getZoom());
+  }, [pos, map]);
+
   return pos ? <Marker position={pos} /> : null;
 };
 
 const ShopSetup = () => {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
-  const [coords, setCoords] = useState<[number, number]>([19.0760, 72.8777]); // Default Mumbai
+  const [uploadingImg, setUploadingImg] = useState(false);
+  const [coords, setCoords] = useState<[number, number]>([19.0760, 72.8777]); 
   const [imgUrl, setImgUrl] = useState('');
 
   const [formData, setFormData] = useState({
     name: '',
-    address: '',
+    address: '', // Map Address
+    manualAddress: '' // Manual Address
   });
+
+  const handleLocateMe = () => {
+     if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(async (position) => {
+           const { latitude, longitude } = position.coords;
+           setCoords([latitude, longitude]);
+           const addr = await getAddressFromCoords(latitude, longitude);
+           if (addr) setFormData(prev => ({ ...prev, address: addr })); // Update Map Address
+           toast.success('Location found');
+        }, () => {
+           toast.error('Could not access location');
+        });
+     }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -46,7 +83,7 @@ const ShopSetup = () => {
     try {
       await api.post('/shops', {
         name: formData.name,
-        address: formData.address,
+        address: formData.manualAddress, // Use Manual Address for DB
         location: { coordinates: coords },
         image: imgUrl
       });
@@ -58,6 +95,37 @@ const ShopSetup = () => {
       toast.error(error.response?.data?.message || 'Setup failed');
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Image Upload Handler
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!e.target.files || e.target.files.length === 0) return;
+    
+    const file = e.target.files[0];
+    const uploadData = new FormData();
+    uploadData.append('file', file);
+
+    setUploadingImg(true);
+    try {
+      const { data } = await api.post('/upload', uploadData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
+      // Construct public URL. 
+      // Note: Backend returns 'location' which is s3 internal URL usually. 
+      // If using MinIO locally, we need to ensure browser can access it.
+      // If 'location' is http://minio:9000/..., browser on localhost can't see 'minio'.
+      // We need to rewrite it to localhost:9000 if dev.
+      let url = data.location;
+      if (url.includes('minio:9000')) {
+         url = url.replace('minio:9000', 'localhost:9000');
+      }
+      setImgUrl(url);
+      toast.success('Image uploaded!');
+    } catch (err) {
+      toast.error('Image upload failed');
+    } finally {
+      setUploadingImg(false);
     }
   };
 
@@ -94,35 +162,60 @@ const ShopSetup = () => {
 
             <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Profile Image URL</label>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Profile Image</label>
                   <div className="relative">
-                     <ImageIcon className="absolute left-3 top-3.5 text-slate-400" size={18} />
-                     <input 
-                       className="input-field pl-10" 
-                       placeholder="https://..."
-                       value={imgUrl}
-                       onChange={e => setImgUrl(e.target.value)}
-                     />
+                     {imgUrl ? (
+                        <div className="relative h-10 w-full">
+                           <img src={imgUrl} alt="Preview" className="h-full w-full object-cover rounded-lg" />
+                           <button type="button" onClick={() => setImgUrl('')} className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-0.5"><X size={12}/></button>
+                        </div>
+                     ) : (
+                        <div className="flex items-center gap-2">
+                           <label className="cursor-pointer btn btn-outline flex-1 flex justify-center items-center gap-2 py-2 text-xs">
+                              {uploadingImg ? <Loader2 className="animate-spin" size={14}/> : <UploadCloud size={14} />}
+                              Upload
+                              <input type="file" className="hidden" accept="image/*" onChange={handleImageUpload} />
+                           </label>
+                        </div>
+                     )}
                   </div>
                 </div>
                 <div>
-                   <label className="block text-sm font-medium text-slate-700 mb-1">Full Address</label>
+                   <label className="block text-sm font-medium text-slate-700 mb-1">Map Location (Auto)</label>
                    <input 
-                     required
-                     className="input-field"
-                     value={formData.address}
-                     onChange={e => setFormData({...formData, address: e.target.value})}
+                     readOnly
+                     className="input-field bg-slate-50 text-slate-500 text-xs truncate cursor-not-allowed"
+                     value={formData.address || 'Tap map to set'}
+                     title={formData.address}
                    />
                 </div>
+            </div>
+
+            {/* Manual Address Field */}
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">Official Shop Address (Manual)</label>
+              <textarea 
+                required
+                className="input-field min-h-[80px]" 
+                placeholder="Building, Floor, Landmark..."
+                value={formData.manualAddress}
+                onChange={e => setFormData({...formData, manualAddress: e.target.value})}
+              />
             </div>
 
             <div className="h-[300px] w-full rounded-xl overflow-hidden border border-slate-200 relative z-0">
                <MapContainer center={coords} zoom={13} style={{ height: '100%', width: '100%' }}>
                   <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
-                  <LocationMarker setPos={setCoords} pos={coords} />
+                  <LocationMarker setPos={setCoords} pos={coords} setAddress={setFormData} />
                </MapContainer>
-               <div className="absolute top-2 right-2 z-[1000] bg-white px-2 py-1 rounded shadow text-xs font-bold">
-                  Tap to set location
+               
+               <div className="absolute top-2 right-2 z-[1000] flex flex-col gap-2 items-end">
+                  <div className="bg-white/90 backdrop-blur px-3 py-1.5 rounded-lg shadow-sm text-xs font-bold text-slate-600 border border-slate-200">
+                     Tap map to set pin
+                  </div>
+                  <button type="button" onClick={handleLocateMe} className="bg-white px-3 py-2 rounded-lg shadow-md hover:bg-slate-50 text-primary border border-slate-200 flex items-center gap-2 text-xs font-bold transition-all" title="Use My Location">
+                     <Crosshair size={16} /> Use My Location
+                  </button>
                </div>
             </div>
 

@@ -3,11 +3,10 @@ import api from '../services/api';
 import { AuthContext } from '../context/AuthContext';
 import FileUpload from '../components/FileUpload';
 import toast from 'react-hot-toast';
-import { Store, ShoppingCart, LogOut, FileText, Trash2, Eye, Edit2, MapPin, ArrowRight, Loader2, Info, QrCode, X } from 'lucide-react';
+import { Store, ShoppingCart, LogOut, FileText, Trash2, Eye, Edit2, MapPin, ArrowRight, Loader2, Info, QrCode, X, ArrowLeft, Clock } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { Html5QrcodeScanner } from 'html5-qrcode';
 
-// ... CartItem interface ...
 interface CartItem {
   storageKey: string;
   originalName: string;
@@ -32,15 +31,59 @@ const StudentDashboard = () => {
 
   const [cart, setCart] = useState<CartItem[]>([]);
   const [showScanner, setShowScanner] = useState(false);
+  const [showOrdersModal, setShowOrdersModal] = useState(false);
+  const [myOrders, setMyOrders] = useState<any[]>([]);
 
-  // Fetch Shops on Mount
+  // Calculate Distance (Haversine Formula)
+  const getDistance = (lat1: number, lon1: number, lat2: number, lon2: number) => {
+    const R = 6371; 
+    const dLat = (lat2 - lat1) * (Math.PI / 180);
+    const dLon = (lon2 - lon1) * (Math.PI / 180);
+    const a = 
+      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+      Math.cos(lat1 * (Math.PI / 180)) * Math.cos(lat2 * (Math.PI / 180)) * 
+      Math.sin(dLon / 2) * Math.sin(dLon / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return R * c; 
+  };
+
+  const handleSelectShop = (shop: any) => {
+     setSelectedShop(shop);
+     navigate(`?shopId=${shop._id}`);
+  };
+
+  const handleClearShop = () => {
+     setSelectedShop(null);
+     navigate('/student/dashboard');
+  };
+
+  // Fetch Shops on Mount & Sort by Location
   useEffect(() => {
     const fetchShops = async () => {
       try {
         const { data } = await api.get('/shops');
-        setShops(data);
+        let sortedShops = data;
 
-        // QR Code / Deep Link Support
+        // Try to get user location for sorting
+        if (navigator.geolocation) {
+           navigator.geolocation.getCurrentPosition((pos) => {
+              const { latitude, longitude } = pos.coords;
+              
+              sortedShops = data.map((shop: any) => {
+                 const [shopLat, shopLng] = shop.location?.coordinates || [0,0];
+                 const dist = getDistance(latitude, longitude, shopLat, shopLng);
+                 return { ...shop, distance: dist };
+              }).sort((a: any, b: any) => a.distance - b.distance);
+              
+              setShops(sortedShops);
+           }, () => {
+              setShops(data);
+           });
+        } else {
+           setShops(data);
+        }
+
+        // Check URL for initial selection
         const params = new URLSearchParams(window.location.search);
         const shopIdParam = params.get('shopId');
         if (shopIdParam) {
@@ -57,63 +100,89 @@ const StudentDashboard = () => {
     fetchShops();
   }, []);
 
+  // Sync back button (popstate)
+  useEffect(() => {
+     const handlePopState = () => {
+        const params = new URLSearchParams(window.location.search);
+        const shopId = params.get('shopId');
+        if (!shopId) setSelectedShop(null);
+     };
+     window.addEventListener('popstate', handlePopState);
+     return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
+
   // Initialize Scanner when modal opens
   useEffect(() => {
+    let scanner: Html5QrcodeScanner | null = null;
     if (showScanner) {
-       // Small delay to ensure DOM is ready
        const timer = setTimeout(() => {
-          const scanner = new Html5QrcodeScanner(
+          scanner = new Html5QrcodeScanner(
              "reader", 
              { fps: 10, qrbox: { width: 250, height: 250 } },
-             false // verbose
+             false 
           );
           
           scanner.render((decodedText) => {
-             // Expecting URL: http://.../student/dashboard?shopId=XYZ
              try {
                 const url = new URL(decodedText);
                 const shopId = url.searchParams.get('shopId');
                 if (shopId) {
                    const target = shops.find(s => s._id === shopId);
                    if (target) {
-                      setSelectedShop(target);
+                      handleSelectShop(target);
                       toast.success(`Found Shop: ${target.name}`);
-                      scanner.clear();
+                      scanner?.clear();
                       setShowScanner(false);
                    } else {
-                      toast.error('Shop not found in directory');
+                      toast.error('Shop not found');
                    }
                 }
              } catch (e) {
-                // maybe just raw ID?
                 const target = shops.find(s => s._id === decodedText);
                 if (target) {
-                   setSelectedShop(target);
-                   scanner.clear();
+                   handleSelectShop(target);
+                   scanner?.clear();
                    setShowScanner(false);
                 }
              }
-          }, () => {
-             // ignore scanning errors
-          });
+          }, () => {});
           
-          // Cleanup
-          return () => scanner.clear();
        }, 100);
-       return () => clearTimeout(timer);
+       return () => {
+         clearTimeout(timer);
+         if (scanner) {
+           scanner.clear().catch(console.error);
+         }
+       };
     }
   }, [showScanner, shops]);
 
-  // ... existing functions (handleUploadComplete, updateConfig, updatePageCount) ...
+  const fetchMyOrders = async () => {
+    try {
+      const { data } = await api.get('/orders/my');
+      setMyOrders(data);
+    } catch (e) { }
+  };
+
+  const handleCancelOrder = async (orderId: string) => {
+    if(!window.confirm('Are you sure you want to cancel? Refund will be initiated.')) return;
+    try {
+      await api.put(`/orders/${orderId}/cancel`);
+      toast.success('Order cancelled & Refunded');
+      fetchMyOrders(); 
+    } catch (e) {
+      toast.error('Could not cancel order');
+    }
+  };
+
+  useEffect(() => {
+    if (showOrdersModal) fetchMyOrders();
+  }, [showOrdersModal]);
+
   const handleUploadComplete = (files: any[]) => {
     const newItems = files.map(f => ({
       ...f,
-      config: { 
-        color: 'bw', 
-        side: 'single', 
-        copies: 1,
-        pageRange: 'All' 
-      }
+      config: { color: 'bw', side: 'single', copies: 1, pageRange: 'All' }
     }));
     setCart(prev => [...prev, ...newItems]);
     toast.success(`${files.length} file(s) added!`);
@@ -133,27 +202,21 @@ const StudentDashboard = () => {
 
   const calculateTotal = () => {
     if (!selectedShop) return 0;
-    
     return cart.reduce((total, item) => {
       const isColor = item.config.color === 'color';
       const isDouble = item.config.side === 'double';
       const totalPages = item.pageCount * item.config.copies;
-
       let rate = 0;
-      
-      // Bulk Check
       const bulk = selectedShop.pricing.bulkDiscount;
       if (bulk && bulk.enabled && totalPages >= bulk.threshold) {
          rate = isColor ? bulk.colorPrice : bulk.bwPrice;
       } else {
-         // Standard
          if (isColor) {
             rate = isDouble ? selectedShop.pricing.color.double : selectedShop.pricing.color.single;
          } else {
             rate = isDouble ? selectedShop.pricing.bw.double : selectedShop.pricing.bw.single;
          }
       }
-      
       return total + (rate * totalPages);
     }, 0);
   };
@@ -165,29 +228,24 @@ const StudentDashboard = () => {
         shopId: selectedShop._id,
         items: cart
       });
-
       await api.post('/orders/checkout', { orderId: order._id });
-      
       const userConfirmed = window.confirm(
         `Authorized Payment Gateway (Mock)\n\n` + 
-        `Merchant: ${selectedShop.name}\n` +
+        `Merchant: ${selectedShop.name}\n` + 
         `Amount: ₹${order.totalAmount}\n\n` + 
         `Click OK to Pay Securely`
       );
-      
       if (userConfirmed) {
          await api.post('/orders/verify', {
             orderId: order._id,
             paymentId: `pay_mock_${Date.now()}`
          });
-         
          toast.success('Payment Successful! Order sent to shop.');
          setCart([]);
       } else {
          toast.error('Payment Cancelled');
       }
     } catch (err: any) {
-      console.error(err);
       toast.error('Order processing failed');
     }
   };
@@ -202,6 +260,9 @@ const StudentDashboard = () => {
             XeroxSaaS <span className="text-slate-400 font-normal">| Find a Shop</span>
           </h1>
           <div className="flex gap-4">
+             <button onClick={() => setShowOrdersModal(true)} className="btn btn-outline flex items-center gap-2">
+               <Clock size={18} /> My Orders
+             </button>
              <button onClick={() => setShowScanner(true)} className="btn btn-primary flex items-center gap-2">
                <QrCode size={18} /> Scan Shop QR
              </button>
@@ -226,10 +287,10 @@ const StudentDashboard = () => {
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {shops.map(shop => (
-                <div key={shop._id} className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm hover:shadow-md transition-all cursor-pointer group" onClick={() => setSelectedShop(shop)}>
+                <div key={shop._id} className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm hover:shadow-md transition-all cursor-pointer group" onClick={() => handleSelectShop(shop)}>
                   {/* Shop Image if available */}
                   {shop.image ? (
-                     <div className="h-32 w-full bg-cover bg-center rounded-xl mb-4" style={{backgroundImage: `url(${shop.image})`}} />
+                     <div className="h-32 w-full bg-cover bg-center rounded-xl mb-4" style={{backgroundImage: `url(${shop.image.replace('minio:9000', 'localhost:9000')})`}} />
                   ) : (
                      <div className="h-32 w-full bg-slate-100 rounded-xl mb-4 flex items-center justify-center text-slate-300">
                         <Store size={40} />
@@ -241,6 +302,7 @@ const StudentDashboard = () => {
                       <h3 className="font-bold text-lg text-slate-900 group-hover:text-primary transition-colors">{shop.name}</h3>
                       <p className="text-sm text-slate-500 flex items-center gap-1 mt-1">
                         <MapPin size={14} /> {shop.address}
+                        {shop.distance !== undefined && <span className="text-xs font-bold text-primary ml-2">• {shop.distance.toFixed(1)} km</span>}
                       </p>
                     </div>
                     <span className={`px-2 py-1 rounded text-[10px] font-bold uppercase border
@@ -283,6 +345,42 @@ const StudentDashboard = () => {
               </div>
            </div>
         )}
+
+        {/* My Orders Modal */}
+        {showOrdersModal && (
+           <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
+              <div className="bg-white rounded-2xl w-full max-w-2xl max-h-[80vh] overflow-hidden flex flex-col shadow-xl">
+                 <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50">
+                    <h3 className="font-bold text-lg">My Orders</h3>
+                    <button onClick={() => setShowOrdersModal(false)}><X/></button>
+                 </div>
+                 <div className="flex-1 overflow-auto p-4 space-y-4">
+                    {myOrders.length === 0 ? <p className="text-center text-slate-400 py-10">No orders yet.</p> : 
+                       myOrders.map(order => (
+                          <div key={order._id} className="border border-slate-200 rounded-xl p-4 flex justify-between items-center">
+                             <div>
+                                <div className="flex items-center gap-2 mb-1">
+                                   <span className="font-bold text-slate-800">#{order._id.slice(-4)}</span>
+                                   <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${ 
+                                      order.orderStatus === 'QUEUED' ? 'bg-yellow-100 text-yellow-700' :
+                                      order.orderStatus === 'COMPLETED' ? 'bg-green-100 text-green-700' :
+                                      order.orderStatus === 'CANCELLED' ? 'bg-red-100 text-red-700' : 'bg-slate-100'
+                                   }`}>{order.orderStatus}</span>
+                                </div>
+                                <p className="text-xs text-slate-500">{new Date(order.createdAt).toLocaleString()} • ₹{order.totalAmount}</p>
+                             </div>
+                             {order.orderStatus === 'QUEUED' && (
+                                <button onClick={() => handleCancelOrder(order._id)} className="btn btn-outline text-red-500 hover:bg-red-50 border-red-200 text-xs py-1.5">
+                                   Cancel & Refund
+                                </button>
+                             )}
+                          </div>
+                       ))
+                    }
+                 </div>
+              </div>
+           </div>
+        )}
       </div>
     );
   }
@@ -291,17 +389,20 @@ const StudentDashboard = () => {
   return (
     <div className="min-h-screen bg-slate-50">
       <header className="bg-white border-b border-slate-200 px-6 py-4 flex justify-between items-center sticky top-0 z-20 shadow-sm">
-        <h1 className="text-xl font-bold flex items-center gap-2">
-          <Store className="text-primary" />
-          XeroxSaaS <span className="text-slate-400 font-normal">| Student</span>
-        </h1>
+        <div className="flex items-center gap-4">
+           <button onClick={handleClearShop} className="p-2 hover:bg-slate-100 rounded-full text-slate-500" title="Back to Shops">
+             <ArrowLeft size={20} />
+           </button>
+           <h1 className="text-xl font-bold flex items-center gap-2">
+             <Store className="text-primary" />
+             <span className="hidden md:inline">XeroxSaaS <span className="text-slate-400 font-normal">| Student</span></span>
+           </h1>
+        </div>
+        
         <div className="flex items-center gap-6">
           <div className="hidden md:flex flex-col items-end mr-4">
              <span className="text-xs text-slate-400">Printing at</span>
-             <span className="text-sm font-bold text-slate-800 flex items-center gap-1">
-               {selectedShop.name}
-               <button onClick={() => setSelectedShop(null)} className="text-primary text-[10px] uppercase font-bold bg-primary/10 px-2 py-0.5 rounded hover:bg-primary/20">Change</button>
-             </span>
+             <span className="text-sm font-bold text-slate-800">{selectedShop.name}</span>
           </div>
           <button onClick={() => { logout(); navigate('/login'); }} className="text-sm text-slate-500 hover:text-red-500 flex items-center gap-2">
             <LogOut size={16} /> Logout
@@ -319,7 +420,7 @@ const StudentDashboard = () => {
               <h2 className="font-bold text-lg">Upload Documents</h2>
               <div className="flex items-center gap-2 text-xs text-slate-500 bg-slate-100 px-3 py-1.5 rounded-lg border border-slate-200">
                 <Info size={14}/>
-                Current Rates: <span className="font-bold text-slate-700">B&W ₹{selectedShop.pricing?.bw?.single}</span> / <span className="font-bold text-slate-700">Color ₹{selectedShop.pricing?.color?.single}</span>
+                Current Shop Rates: <span className="font-bold text-slate-700">B&W ₹{selectedShop.pricing?.bw?.single}</span> / <span className="font-bold text-slate-700">Color ₹{selectedShop.pricing?.color?.single}</span>
               </div>
             </div>
             <FileUpload onUploadComplete={handleUploadComplete} />
@@ -449,20 +550,11 @@ const StudentDashboard = () => {
                   <div className="w-2/3">
                     <p className="font-medium text-slate-800 truncate">{item.originalName}</p>
                     <p className="text-xs text-slate-500 mt-1">
-                      {item.config.color === 'color' ? 'Color' : 'B&W'} • {item.config.side === 'double' ? 'Duplex' : 'Single'} • {item.config.copies}x
+                      {item.config.color === 'color' ? 'Color' : 'B&W'} • Range: {item.config.pageRange} • {item.config.copies}x
                     </p>
                   </div>
-                  {/* Note: This simplistic client-side calc is for display only. Server is authority. */}
                   <span className="font-bold text-slate-700">
-                     ₹{(() => {
-                        const isCol = item.config.color === 'color';
-                        const isDbl = item.config.side === 'double';
-                        // We use standard rates here for display, bulk is applied at total usually or complex logic
-                        const rate = isCol 
-                           ? (isDbl ? selectedShop.pricing.color.double : selectedShop.pricing.color.single)
-                           : (isDbl ? selectedShop.pricing.bw.double : selectedShop.pricing.bw.single);
-                        return (rate * item.pageCount * item.config.copies).toFixed(2);
-                     })()}
+                     ₹{((item.config.color === 'bw' ? selectedShop.pricing?.bw?.single : selectedShop.pricing?.color?.single) * item.pageCount * item.config.copies).toFixed(2)}
                   </span>
                 </div>
               ))}
@@ -473,12 +565,6 @@ const StudentDashboard = () => {
                 <span className="text-slate-500">Total Amount</span>
                 <span className="text-3xl font-bold text-slate-900">₹{calculateTotal().toFixed(2)}</span>
               </div>
-              
-              {selectedShop.pricing.bulkDiscount?.enabled && (
-                 <p className="text-xs text-green-600 text-center mb-4">
-                    Bulk Discount applied for orders over {selectedShop.pricing.bulkDiscount.threshold} pages!
-                 </p>
-              )}
 
               <button 
                 onClick={handleCheckout}

@@ -25,7 +25,7 @@ router.post('/', authorize('OWNER'), createShop);
 router.get('/my-shop', authorize('OWNER', 'EMPLOYEE'), getMyShop);
 
 // Toggle Shop Status (Open/Closed)
-router.put('/status', authorize('OWNER'), toggleShopStatus);
+router.put('/status', authorize('OWNER', 'EMPLOYEE'), toggleShopStatus);
 
 // Add Employee
 router.post('/employees', authorize('OWNER'), addEmployee);

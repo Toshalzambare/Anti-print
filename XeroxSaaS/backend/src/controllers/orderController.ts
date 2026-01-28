@@ -118,6 +118,9 @@ export const verifyPayment = async (req: AuthRequest, res: Response): Promise<vo
     order.paymentId = paymentId || `pay_mock_${Date.now()}`;
     await order.save();
 
+    // Populate User for Socket Emission
+    await order.populate('user', 'name email');
+
     // Emit Socket Event (Only after payment success)
     const io = req.app.get('io');
     if (io) {
@@ -176,5 +179,130 @@ export const updateOrderStatus = async (req: AuthRequest, res: Response): Promis
     res.json(order);
   } catch (error) {
     res.status(500).json({ message: 'Update failed' });
+  }
+};
+
+// @desc    Cancel Order (Student or Shop)
+// @route   PUT /api/orders/:id/cancel
+// @access  Private
+export const cancelOrder = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const order = await Order.findById(req.params.id);
+
+    if (!order) {
+      res.status(404).json({ message: 'Order not found' });
+      return;
+    }
+
+    // Check permissions (User owns it OR Shop owns it)
+    const isOwner = order.user.toString() === req.user?._id.toString();
+    
+    // Check if shop owner/employee
+    let isShopStaff = false;
+    if (req.user?.role === 'OWNER' || req.user?.role === 'EMPLOYEE') {
+       const shop = await Shop.findById(order.shop);
+       if (shop && (shop.owner.toString() === req.user._id.toString() || req.user.associatedShop?.toString() === shop._id.toString())) {
+          isShopStaff = true;
+       }
+    }
+
+    if (!isOwner && !isShopStaff) {
+       res.status(401).json({ message: 'Not authorized' });
+       return;
+    }
+
+    // Can only cancel if QUEUED
+    if (order.orderStatus !== 'QUEUED') {
+       res.status(400).json({ message: 'Cannot cancel order in progress or already completed' });
+       return;
+    }
+
+    // Refund Logic (Mock)
+    if (order.paymentStatus === 'PAID') {
+       console.log(`[Refund] Initiating refund for Order ${order._id} Amount: ${order.totalAmount}`);
+       // Here we would call Razorpay refund API
+       order.paymentStatus = 'FAILED'; // Using FAILED to signify refunded/reversed for now or add REFUNDED enum
+    }
+
+    order.orderStatus = 'CANCELLED';
+    await order.save();
+
+    res.json({ message: 'Order cancelled successfully', order });
+
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: 'Cancellation failed' });
+  }
+};
+
+// @desc    Get Shop History with Filters
+// @route   GET /api/orders/history
+// @access  Private (Owner/Employee)
+export const getShopHistory = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const { startDate, endDate, search } = req.query;
+
+    // 1. Find Shop
+    let shopId;
+    if (req.user?.role === 'EMPLOYEE') {
+       shopId = req.user.associatedShop;
+    } else {
+       const shop = await Shop.findOne({ owner: req.user?._id });
+       shopId = shop?._id;
+    }
+
+    if (!shopId) {
+      res.status(404).json({ message: 'Shop not found' });
+      return;
+    }
+
+    // 2. Build Query
+    let query: any = { shop: shopId };
+
+    // Date Filter
+    if (startDate || endDate) {
+       query.createdAt = {};
+       if (startDate) query.createdAt.$gte = new Date(startDate as string);
+       if (endDate) query.createdAt.$lte = new Date(new Date(endDate as string).setHours(23,59,59));
+    }
+
+    // Search (Complex: Need to search by populated User Name)
+    // Mongoose doesn't support direct filtering on populated fields easily in `find`.
+    // We can filter AFTER fetch or use Aggregate. For scale, Aggregate is better.
+    // For MVP, if search is present, we might need to find users first?
+    // Actually, let's keep it simple: Search by Order ID (last 6 chars) or exact match.
+    // Or if search string provided, we fetch orders and filter in JS (okay for small scale).
+    
+    const orders = await Order.find(query)
+      .populate('user', 'name email')
+      .sort({ createdAt: -1 });
+
+    if (search) {
+       const searchStr = (search as string).toLowerCase();
+       const filtered = orders.filter((o: any) => 
+          o.user?.name.toLowerCase().includes(searchStr) || 
+          o._id.toString().includes(searchStr)
+       );
+       res.json(filtered);
+       return;
+    }
+
+    res.json(orders);
+
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: 'Server Error' });
+  }
+};
+
+// @desc    Get My Orders (Student)
+// @route   GET /api/orders/my
+// @access  Private (Student)
+export const getMyOrders = async (req: AuthRequest, res: Response): Promise<void> => {
+  try {
+    const orders = await Order.find({ user: req.user?._id }).sort({ createdAt: -1 });
+    res.json(orders);
+  } catch (error) {
+    res.status(500).json({ message: 'Server Error' });
   }
 };

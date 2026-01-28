@@ -1,32 +1,66 @@
 import mongoose from 'mongoose';
+import AWS from 'aws-sdk';
 import dotenv from 'dotenv';
 import path from 'path';
 
-// Load env vars
-dotenv.config({ path: path.resolve(__dirname, '../../.env') });
+// 1. Load Env Vars (Root .env)
+const envPath = path.resolve(__dirname, '../../../.env');
+console.log(`Loading .env from: ${envPath}`);
+dotenv.config({ path: envPath });
 
 const resetDb = async () => {
   try {
-    if (!process.env.MONGO_URI) {
-      throw new Error('MONGO_URI not found');
-    }
+    // --- STEP 1: CLEAR MONGODB ---
+    if (!process.env.MONGO_URI) throw new Error('MONGO_URI not found');
 
+    console.log('⏳ Connecting to MongoDB...');
     await mongoose.connect(process.env.MONGO_URI);
-    console.log('Connected to MongoDB...');
-
-    const collections = await mongoose.connection.db?.collections();
     
+    const collections = await mongoose.connection.db?.collections();
     if (collections) {
       for (let collection of collections) {
         await collection.deleteMany({});
-        console.log(`Cleared collection: ${collection.collectionName}`);
+        console.log(`   ✅ Cleared Mongo Collection: ${collection.collectionName}`);
       }
     }
 
-    console.log('Database reset complete.');
+    // --- STEP 2: CLEAR MINIO (S3) ---
+    console.log('⏳ Connecting to MinIO Storage...');
+    
+    const s3 = new AWS.S3({
+      accessKeyId: process.env.MINIO_ROOT_USER || 'minioadmin',
+      secretAccessKey: process.env.MINIO_ROOT_PASSWORD || 'minioadmin',
+      endpoint: `http://localhost:${process.env.MINIO_PORT || 9000}`,
+      s3ForcePathStyle: true,
+      signatureVersion: 'v4',
+    });
+
+    const bucketName = process.env.MINIO_DEFAULT_BUCKET || 'print-documents';
+
+    // List all objects
+    const listedObjects = await s3.listObjectsV2({ Bucket: bucketName }).promise();
+
+    if (listedObjects.Contents && listedObjects.Contents.length > 0) {
+      const deleteParams: AWS.S3.DeleteObjectsRequest = {
+        Bucket: bucketName,
+        Delete: { Objects: [] }
+      };
+
+      listedObjects.Contents.forEach(({ Key }) => {
+        if (Key) deleteParams.Delete.Objects.push({ Key });
+      });
+
+      await s3.deleteObjects(deleteParams).promise();
+      console.log(`   ✅ Cleared MinIO Bucket: '${bucketName}' (${listedObjects.Contents.length} files deleted)`);
+    } else {
+      console.log(`   ℹ️  MinIO Bucket '${bucketName}' was already empty.`);
+    }
+
+    console.log('\n✨ SYSTEM RESET COMPLETE ✨');
     process.exit(0);
+
   } catch (error) {
-    console.error('Error resetting database:', error);
+    console.error('\n❌ Error resetting system:', error);
     process.exit(1);
   }
 };
