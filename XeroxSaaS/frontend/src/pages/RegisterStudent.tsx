@@ -3,7 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { AuthContext } from '../context/AuthContext';
 import api from '../services/api';
 import toast from 'react-hot-toast';
-import { User, ArrowRight, Loader2, Store } from 'lucide-react';
+import { ArrowRight, Loader2, Store } from 'lucide-react';
 
 const RegisterStudent = () => {
   const [name, setName] = useState('');

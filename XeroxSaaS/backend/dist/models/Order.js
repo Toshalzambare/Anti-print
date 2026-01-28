@@ -46,7 +46,8 @@ const OrderSchema = new mongoose_1.Schema({
                 color: { type: String, enum: ['bw', 'color'], default: 'bw' },
                 side: { type: String, enum: ['single', 'double'], default: 'single' },
                 copies: { type: Number, default: 1 },
-                paperType: { type: String, default: 'A4_75gsm' }
+                paperType: { type: String, default: 'A4_75gsm' },
+                pageRange: { type: String, default: 'All' }
             },
             calculatedCost: { type: Number, required: true }
         }],

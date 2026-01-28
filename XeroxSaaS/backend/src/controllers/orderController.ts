@@ -23,16 +23,28 @@ export const createOrder = async (req: AuthRequest, res: Response): Promise<void
     // 2. Calculate Costs Server-Side (Security: Never trust client price)
     let grandTotal = 0;
     const processedItems = items.map((item: any) => {
-      // Get base rate (e.g., 2.0 or 10.0)
-      let rate = shop.pricing.baseRate[item.config.color as 'bw' | 'color'];
-      
-      // Apply Side Multiplier (e.g., Double side might be 0.8x per page)
-      if (item.config.side === 'double') {
-        rate = rate * shop.pricing.multipliers.doubleSide;
+      const isColor = item.config.color === 'color';
+      const isDouble = item.config.side === 'double';
+      const totalPages = item.pageCount * item.config.copies; // Total pages for this specific doc batch
+
+      let ratePerPage = 0;
+
+      // 1. Check Bulk Discount First
+      const bulk = shop.pricing.bulkDiscount;
+      if (bulk && bulk.enabled && totalPages >= bulk.threshold) {
+        // Bulk Pricing applies
+        ratePerPage = isColor ? bulk.colorPrice : bulk.bwPrice;
+      } else {
+        // 2. Standard Pricing
+        if (isColor) {
+           ratePerPage = isDouble ? shop.pricing.color.double : shop.pricing.color.single;
+        } else {
+           ratePerPage = isDouble ? shop.pricing.bw.double : shop.pricing.bw.single;
+        }
       }
 
-      // Cost for this file = Rate * Pages * Copies
-      const fileCost = rate * item.pageCount * item.config.copies;
+      // Cost for this file
+      const fileCost = ratePerPage * totalPages;
       
       grandTotal += fileCost;
 

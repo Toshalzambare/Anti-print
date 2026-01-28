@@ -2,13 +2,15 @@ import React, { useContext, useEffect, useState } from 'react';
 import { AuthContext } from '../context/AuthContext';
 import api from '../services/api';
 import toast from 'react-hot-toast';
-import { LayoutDashboard, LogOut, Printer, RefreshCw, CheckCircle, Clock, Copy, AlertTriangle, FileText, Layers, Palette, Power, UserPlus, X, Save } from 'lucide-react';
+import { LayoutDashboard, LogOut, Printer, RefreshCw, CheckCircle, Clock, FileText, Layers, Palette, Power, UserPlus, X, Settings, QrCode } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { io } from 'socket.io-client';
+import QRCode from 'react-qr-code';
 
 const ShopDashboard = () => {
   const { user, logout } = useContext(AuthContext)!;
   const navigate = useNavigate();
+  
   const [orders, setOrders] = useState<any[]>([]);
   const [shop, setShop] = useState<any>(null);
   const [stats, setStats] = useState({ pending: 0, printed: 0, revenue: 0 });
@@ -18,18 +20,45 @@ const ShopDashboard = () => {
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [previewType, setPreviewType] = useState<string>('pdf'); // 'pdf' or 'img'
   const [showEmployeeModal, setShowEmployeeModal] = useState(false);
+  const [showQR, setShowQR] = useState(false);
   
   // Employee Form
   const [empName, setEmpName] = useState('');
   const [empEmail, setEmpEmail] = useState('');
   const [empPass, setEmpPass] = useState('');
 
+  const downloadQR = () => {
+     const svg = document.getElementById("shop-qr");
+     if (!svg) return;
+     const svgData = new XMLSerializer().serializeToString(svg);
+     const canvas = document.createElement("canvas");
+     const ctx = canvas.getContext("2d");
+     const img = new Image();
+     img.onload = () => {
+       canvas.width = img.width;
+       canvas.height = img.height;
+       ctx?.drawImage(img, 0, 0);
+       const pngFile = canvas.toDataURL("image/png");
+       const downloadLink = document.createElement("a");
+       downloadLink.download = `${shop.name}-QR.png`;
+       downloadLink.href = pngFile;
+       downloadLink.click();
+     };
+     img.src = "data:image/svg+xml;base64," + btoa(svgData);
+  };
+
   // 1. Fetch Initial Data
   const fetchShopDetails = async () => {
     try {
       const { data } = await api.get('/shops/my-shop');
       setShop(data);
-    } catch (err) { console.error(err); }
+    } catch (err: any) { 
+      // If Owner doesn't have a shop, send to setup
+      if (err.response?.status === 404 && user?.role === 'OWNER') {
+         navigate('/shop/setup');
+      }
+      console.error(err); 
+    }
   };
 
   const fetchOrders = async () => {
@@ -45,6 +74,29 @@ const ShopDashboard = () => {
     const printed = data.filter((o: any) => o.orderStatus === 'COMPLETED').length;
     const revenue = data.reduce((sum: number, o: any) => sum + (o.totalAmount || 0), 0);
     setStats({ pending, printed, revenue });
+  };
+
+  const handlePrint = () => {
+    if (!previewUrl) return;
+    
+    if (previewType === 'pdf') {
+      // Open PDF in new tab - Browser's native PDF viewer has the best Print UX
+      window.open(previewUrl, '_blank');
+    } else {
+      // For Images, create a print-ready popup
+      const printWindow = window.open('', '_blank', 'width=800,height=600');
+      if (printWindow) {
+        printWindow.document.write(`
+          <html>
+            <head><title>Print Document</title></head>
+            <body style="margin:0; display:flex; justify-content:center; align-items:center;">
+              <img src="${previewUrl}" style="max-width:100%; max-height:100vh;" onload="window.print(); window.close();" />
+            </body>
+          </html>
+        `);
+        printWindow.document.close();
+      }
+    }
   };
 
   useEffect(() => {
@@ -64,7 +116,7 @@ const ShopDashboard = () => {
       socket.emit('join_shop', shop._id);
       
       const handleNewOrder = (newOrder: any) => {
-        toast((t) => (
+        toast(() => (
           <div className="flex items-center gap-2">
             <span className="text-xl">🔔</span>
             <div>
@@ -171,7 +223,16 @@ const ShopDashboard = () => {
           <h2 className="text-xl font-bold flex items-center gap-2"><Printer className="text-primary"/> XeroxSaaS</h2>
           <p className="text-xs text-slate-400 mt-1">Partner Portal</p>
         </div>
-        <nav className="flex-1 p-4"><div className="flex items-center gap-3 px-4 py-3 bg-white/10 text-primary rounded-xl cursor-pointer"><LayoutDashboard size={20} /> Dashboard</div></nav>
+        <nav className="flex-1 p-4 space-y-2">
+          <div className="flex items-center gap-3 px-4 py-3 bg-white/10 text-primary rounded-xl cursor-pointer">
+            <LayoutDashboard size={20} /> Dashboard
+          </div>
+          {user?.role === 'OWNER' && (
+             <button onClick={() => navigate('/shop/settings')} className="w-full flex items-center gap-3 px-4 py-3 text-slate-400 hover:text-white hover:bg-white/5 rounded-xl transition-colors text-left">
+               <Settings size={20} /> Settings
+             </button>
+          )}
+        </nav>
         <div className="p-4 border-t border-slate-700"><button onClick={() => { logout(); navigate('/login'); }} className="w-full flex items-center gap-2 px-4 py-2 text-sm text-red-400 hover:bg-red-400/10 rounded-lg"><LogOut size={16} /> Logout</button></div>
       </aside>
 
@@ -208,9 +269,14 @@ const ShopDashboard = () => {
              
              {/* Add Employee (Owner Only) */}
              {user?.role === 'OWNER' && (
+                <>
+                <button onClick={() => setShowQR(true)} className="btn btn-outline flex items-center gap-2 text-xs md:text-sm whitespace-nowrap px-3 py-1.5 md:px-4 md:py-2">
+                  <QrCode size={16} /> <span className="hidden sm:inline">QR Code</span>
+                </button>
                 <button onClick={() => setShowEmployeeModal(true)} className="btn btn-outline flex items-center gap-2 text-xs md:text-sm whitespace-nowrap px-3 py-1.5 md:px-4 md:py-2">
                   <UserPlus size={16} /> <span className="hidden sm:inline">Staff</span>
                 </button>
+                </>
              )}
 
              <button onClick={fetchOrders} className="p-2 text-slate-500 hover:text-primary-hover"><RefreshCw size={20}/></button>
@@ -306,6 +372,9 @@ const ShopDashboard = () => {
              <div className="flex justify-between items-center p-4 border-b border-slate-100 bg-slate-50">
                 <h3 className="font-bold text-slate-700 flex items-center gap-2"><FileText size={20}/> Document Preview</h3>
                 <div className="flex gap-2">
+                   <button onClick={handlePrint} className="btn btn-primary text-sm py-1.5 flex items-center gap-2">
+                     <Printer size={16}/> Print Now
+                   </button>
                    <a href={previewUrl} download className="btn btn-outline text-sm py-1.5" target="_blank" rel="noreferrer">Download File</a>
                    <button onClick={() => setPreviewUrl(null)} className="p-2 hover:bg-slate-200 rounded-lg text-slate-500"><X size={24}/></button>
                 </div>
@@ -347,6 +416,30 @@ const ShopDashboard = () => {
                 </button>
              </form>
           </div>
+        </div>
+      )}
+
+      {/* 3. QR Code Modal */}
+      {showQR && shop && (
+        <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4">
+           <div className="bg-white rounded-2xl p-8 max-w-sm w-full text-center animate-in fade-in zoom-in">
+              <h3 className="font-bold text-2xl mb-2">{shop.name}</h3>
+              <p className="text-slate-500 mb-6 text-sm">Scan to upload documents here</p>
+              
+              <div className="bg-white p-4 rounded-xl border border-slate-200 inline-block mb-6">
+                 <QRCode 
+                    id="shop-qr"
+                    value={`${window.location.origin}/student/dashboard?shopId=${shop._id}`} 
+                    size={200}
+                    level="H"
+                 />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                 <button onClick={downloadQR} className="btn btn-primary">Download</button>
+                 <button onClick={() => setShowQR(false)} className="btn btn-outline">Close</button>
+              </div>
+           </div>
         </div>
       )}
 

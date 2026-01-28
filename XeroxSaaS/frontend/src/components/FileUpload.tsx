@@ -1,6 +1,6 @@
 import React, { useState, useCallback } from 'react';
 import api from '../services/api';
-import { UploadCloud, Loader2, FileType, AlertCircle } from 'lucide-react';
+import { UploadCloud, Loader2, AlertCircle } from 'lucide-react';
 
 interface UploadedFile {
   storageKey: string;

@@ -17,6 +17,17 @@ const Login = () => {
   const { login } = useContext(AuthContext)!;
   const navigate = useNavigate();
 
+  // Helper for safe redirect
+  const handleRedirect = () => {
+     const params = new URLSearchParams(window.location.search);
+     const shopId = params.get('shopId');
+     if (shopId) {
+        navigate(`/student/dashboard?shopId=${shopId}`);
+     } else {
+        navigate(activeTab === 'student' ? '/student/dashboard' : '/shop/dashboard');
+     }
+  };
+
   // --- 1. Shop Login (Email/Pass) ---
   const handleShopLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -27,8 +38,11 @@ const Login = () => {
       login(data, data.token);
       toast.success(`Welcome back, ${data.name}!`);
       
-      if (data.role === 'OWNER') navigate('/shop/dashboard');
-      else navigate('/shop/dashboard'); // Employee
+      if (data.role === 'OWNER' || data.role === 'EMPLOYEE') {
+         navigate('/shop/dashboard');
+      } else {
+         handleRedirect();
+      }
 
     } catch (error: any) {
       toast.error(error.response?.data?.message || 'Login failed');
@@ -47,7 +61,7 @@ const Login = () => {
       
       login(data, data.token);
       toast.success(`Welcome, ${data.name}!`);
-      navigate('/student/dashboard');
+      handleRedirect();
 
     } catch (error: any) {
       console.error("Google Backend Error:", error);

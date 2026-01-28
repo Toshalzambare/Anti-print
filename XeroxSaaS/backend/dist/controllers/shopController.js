@@ -12,7 +12,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.addEmployee = exports.toggleShopStatus = exports.updatePricing = exports.updateShop = exports.getAllShops = exports.getMyShop = exports.createShop = void 0;
+exports.addEmployee = exports.updatePricing = exports.toggleShopStatus = exports.updateShop = exports.getAllShops = exports.getMyShop = exports.createShop = void 0;
 const Shop_1 = __importDefault(require("../models/Shop"));
 const User_1 = __importDefault(require("../models/User"));
 const bcryptjs_1 = __importDefault(require("bcryptjs"));
@@ -107,48 +107,25 @@ const updateShop = (req, res) => __awaiter(void 0, void 0, void 0, function* () 
     }
 });
 exports.updateShop = updateShop;
-// @desc    Update Shop Pricing
-// @route   PUT /api/shops/pricing
-// @access  Private (Owner)
-const updatePricing = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
-    var _a;
-    try {
-        const { bw, color } = req.body;
-        const shop = yield Shop_1.default.findOne({ owner: (_a = req.user) === null || _a === void 0 ? void 0 : _a._id });
-        if (!shop) {
-            res.status(404).json({ message: 'Shop not found' });
-            return;
-        }
-        // Update pricing
-        shop.pricing.baseRate.bw = bw;
-        shop.pricing.baseRate.color = color;
-        yield shop.save();
-        res.json(shop);
-    }
-    catch (error) {
-        console.error(error);
-        res.status(500).json({ message: 'Pricing update failed' });
-    }
-});
-exports.updatePricing = updatePricing;
 // @desc    Toggle Shop Status (Open/Closed)
 // @route   PUT /api/shops/status
 // @access  Private (Owner)
 const toggleShopStatus = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
-    var _a, _b;
+    var _a, _b, _c;
     try {
         console.log(`[Toggle] Request from User: ${(_a = req.user) === null || _a === void 0 ? void 0 : _a._id}`);
+        // 1. Find the current status first
         const shop = yield Shop_1.default.findOne({ owner: (_b = req.user) === null || _b === void 0 ? void 0 : _b._id });
         if (!shop) {
             console.log('[Toggle] Shop not found for this user');
             res.status(404).json({ message: 'Shop not found' });
             return;
         }
-        const oldStatus = shop.status;
-        shop.status = shop.status === 'OPEN' ? 'CLOSED' : 'OPEN';
-        yield shop.save();
-        console.log(`[Toggle] Success: ${oldStatus} -> ${shop.status}`);
-        res.json(shop);
+        const newStatus = shop.status === 'OPEN' ? 'CLOSED' : 'OPEN';
+        // 2. Use findOneAndUpdate to bypass full document validation (safe for legacy data)
+        const updatedShop = yield Shop_1.default.findOneAndUpdate({ owner: (_c = req.user) === null || _c === void 0 ? void 0 : _c._id }, { $set: { status: newStatus } }, { new: true });
+        console.log(`[Toggle] Success: ${shop.status} -> ${newStatus}`);
+        res.json(updatedShop);
     }
     catch (error) {
         console.error('[Toggle] Error:', error);
@@ -156,6 +133,32 @@ const toggleShopStatus = (req, res) => __awaiter(void 0, void 0, void 0, functio
     }
 });
 exports.toggleShopStatus = toggleShopStatus;
+// @desc    Update Shop Pricing
+// @route   PUT /api/shops/pricing
+// @access  Private (Owner)
+const updatePricing = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
+    var _a;
+    try {
+        const { bw, color } = req.body;
+        // Use findOneAndUpdate to avoid validation errors
+        const updatedShop = yield Shop_1.default.findOneAndUpdate({ owner: (_a = req.user) === null || _a === void 0 ? void 0 : _a._id }, {
+            $set: {
+                'pricing.baseRate.bw': bw,
+                'pricing.baseRate.color': color
+            }
+        }, { new: true });
+        if (!updatedShop) {
+            res.status(404).json({ message: 'Shop not found' });
+            return;
+        }
+        res.json(updatedShop);
+    }
+    catch (error) {
+        console.error(error);
+        res.status(500).json({ message: 'Pricing update failed' });
+    }
+});
+exports.updatePricing = updatePricing;
 // @desc    Add Employee to Shop
 // @route   POST /api/shops/employees
 // @access  Private (Owner)

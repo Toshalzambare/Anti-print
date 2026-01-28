@@ -1,11 +1,13 @@
-import React, { useState, useContext, useEffect } from 'react';
+import { useState, useContext, useEffect } from 'react';
 import api from '../services/api';
 import { AuthContext } from '../context/AuthContext';
 import FileUpload from '../components/FileUpload';
 import toast from 'react-hot-toast';
-import { Store, ShoppingCart, LogOut, FileText, Trash2, Eye, Edit2, MapPin, ArrowRight, Loader2, Info } from 'lucide-react';
+import { Store, ShoppingCart, LogOut, FileText, Trash2, Eye, Edit2, MapPin, ArrowRight, Loader2, Info, QrCode, X } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { Html5QrcodeScanner } from 'html5-qrcode';
 
+// ... CartItem interface ...
 interface CartItem {
   storageKey: string;
   originalName: string;
@@ -21,7 +23,7 @@ interface CartItem {
 }
 
 const StudentDashboard = () => {
-  const { user, logout } = useContext(AuthContext)!;
+  const { logout } = useContext(AuthContext)!;
   const navigate = useNavigate();
   
   const [shops, setShops] = useState<any[]>([]);
@@ -29,6 +31,7 @@ const StudentDashboard = () => {
   const [selectedShop, setSelectedShop] = useState<any>(null);
 
   const [cart, setCart] = useState<CartItem[]>([]);
+  const [showScanner, setShowScanner] = useState(false);
 
   // Fetch Shops on Mount
   useEffect(() => {
@@ -36,6 +39,15 @@ const StudentDashboard = () => {
       try {
         const { data } = await api.get('/shops');
         setShops(data);
+
+        // QR Code / Deep Link Support
+        const params = new URLSearchParams(window.location.search);
+        const shopIdParam = params.get('shopId');
+        if (shopIdParam) {
+           const targetShop = data.find((s: any) => s._id === shopIdParam);
+           if (targetShop) setSelectedShop(targetShop);
+        }
+
       } catch (error) {
         toast.error('Could not load shops');
       } finally {
@@ -45,6 +57,54 @@ const StudentDashboard = () => {
     fetchShops();
   }, []);
 
+  // Initialize Scanner when modal opens
+  useEffect(() => {
+    if (showScanner) {
+       // Small delay to ensure DOM is ready
+       const timer = setTimeout(() => {
+          const scanner = new Html5QrcodeScanner(
+             "reader", 
+             { fps: 10, qrbox: { width: 250, height: 250 } },
+             false // verbose
+          );
+          
+          scanner.render((decodedText) => {
+             // Expecting URL: http://.../student/dashboard?shopId=XYZ
+             try {
+                const url = new URL(decodedText);
+                const shopId = url.searchParams.get('shopId');
+                if (shopId) {
+                   const target = shops.find(s => s._id === shopId);
+                   if (target) {
+                      setSelectedShop(target);
+                      toast.success(`Found Shop: ${target.name}`);
+                      scanner.clear();
+                      setShowScanner(false);
+                   } else {
+                      toast.error('Shop not found in directory');
+                   }
+                }
+             } catch (e) {
+                // maybe just raw ID?
+                const target = shops.find(s => s._id === decodedText);
+                if (target) {
+                   setSelectedShop(target);
+                   scanner.clear();
+                   setShowScanner(false);
+                }
+             }
+          }, () => {
+             // ignore scanning errors
+          });
+          
+          // Cleanup
+          return () => scanner.clear();
+       }, 100);
+       return () => clearTimeout(timer);
+    }
+  }, [showScanner, shops]);
+
+  // ... existing functions (handleUploadComplete, updateConfig, updatePageCount) ...
   const handleUploadComplete = (files: any[]) => {
     const newItems = files.map(f => ({
       ...f,
@@ -73,29 +133,41 @@ const StudentDashboard = () => {
 
   const calculateTotal = () => {
     if (!selectedShop) return 0;
+    
     return cart.reduce((total, item) => {
-      const rate = item.config.color === 'bw' 
-        ? selectedShop.pricing.baseRate.bw 
-        : selectedShop.pricing.baseRate.color;
-      return total + (rate * item.pageCount * item.config.copies);
+      const isColor = item.config.color === 'color';
+      const isDouble = item.config.side === 'double';
+      const totalPages = item.pageCount * item.config.copies;
+
+      let rate = 0;
+      
+      // Bulk Check
+      const bulk = selectedShop.pricing.bulkDiscount;
+      if (bulk && bulk.enabled && totalPages >= bulk.threshold) {
+         rate = isColor ? bulk.colorPrice : bulk.bwPrice;
+      } else {
+         // Standard
+         if (isColor) {
+            rate = isDouble ? selectedShop.pricing.color.double : selectedShop.pricing.color.single;
+         } else {
+            rate = isDouble ? selectedShop.pricing.bw.double : selectedShop.pricing.bw.single;
+         }
+      }
+      
+      return total + (rate * totalPages);
     }, 0);
   };
 
   const handleCheckout = async () => {
     if (cart.length === 0 || !selectedShop) return;
     try {
-      // 1. Create Order (Pending Payment)
       const { data: order } = await api.post('/orders', {
         shopId: selectedShop._id,
         items: cart
       });
 
-      // 2. Initiate Mock Payment
-      // In real Razorpay, we would get an order_id here and open the SDK
       await api.post('/orders/checkout', { orderId: order._id });
       
-      // 3. Mock Payment Gateway (Alert for MVP)
-      // "Product Level" simulation:
       const userConfirmed = window.confirm(
         `Authorized Payment Gateway (Mock)\n\n` + 
         `Merchant: ${selectedShop.name}\n` +
@@ -104,7 +176,6 @@ const StudentDashboard = () => {
       );
       
       if (userConfirmed) {
-         // 4. Verify Payment
          await api.post('/orders/verify', {
             orderId: order._id,
             paymentId: `pay_mock_${Date.now()}`
@@ -115,7 +186,6 @@ const StudentDashboard = () => {
       } else {
          toast.error('Payment Cancelled');
       }
-
     } catch (err: any) {
       console.error(err);
       toast.error('Order processing failed');
@@ -131,9 +201,14 @@ const StudentDashboard = () => {
             <Store className="text-primary" />
             XeroxSaaS <span className="text-slate-400 font-normal">| Find a Shop</span>
           </h1>
-          <button onClick={() => { logout(); navigate('/login'); }} className="text-sm text-slate-500 hover:text-red-500 flex items-center gap-2">
-            <LogOut size={16} /> Logout
-          </button>
+          <div className="flex gap-4">
+             <button onClick={() => setShowScanner(true)} className="btn btn-primary flex items-center gap-2">
+               <QrCode size={18} /> Scan Shop QR
+             </button>
+             <button onClick={() => { logout(); navigate('/login'); }} className="text-sm text-slate-500 hover:text-red-500 flex items-center gap-2">
+               <LogOut size={16} /> Logout
+             </button>
+          </div>
         </header>
 
         <main className="max-w-6xl mx-auto p-6">
@@ -152,6 +227,15 @@ const StudentDashboard = () => {
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {shops.map(shop => (
                 <div key={shop._id} className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm hover:shadow-md transition-all cursor-pointer group" onClick={() => setSelectedShop(shop)}>
+                  {/* Shop Image if available */}
+                  {shop.image ? (
+                     <div className="h-32 w-full bg-cover bg-center rounded-xl mb-4" style={{backgroundImage: `url(${shop.image})`}} />
+                  ) : (
+                     <div className="h-32 w-full bg-slate-100 rounded-xl mb-4 flex items-center justify-center text-slate-300">
+                        <Store size={40} />
+                     </div>
+                  )}
+                  
                   <div className="flex justify-between items-start mb-4">
                     <div>
                       <h3 className="font-bold text-lg text-slate-900 group-hover:text-primary transition-colors">{shop.name}</h3>
@@ -168,12 +252,12 @@ const StudentDashboard = () => {
 
                   <div className="flex gap-4 text-sm mb-6 bg-slate-50 p-3 rounded-xl border border-slate-100">
                     <div>
-                      <span className="block text-slate-400 text-xs uppercase font-bold">B&W</span>
-                      <span className="font-bold text-slate-800">₹{shop.pricing.baseRate.bw}</span>
+                      <span className="block text-slate-400 text-xs uppercase font-bold">B&W (S)</span>
+                      <span className="font-bold text-slate-800">₹{shop.pricing?.bw?.single || 0}</span>
                     </div>
                     <div>
-                      <span className="block text-slate-400 text-xs uppercase font-bold">Color</span>
-                      <span className="font-bold text-slate-800">₹{shop.pricing.baseRate.color}</span>
+                      <span className="block text-slate-400 text-xs uppercase font-bold">Color (S)</span>
+                      <span className="font-bold text-slate-800">₹{shop.pricing?.color?.single || 0}</span>
                     </div>
                   </div>
 
@@ -185,6 +269,20 @@ const StudentDashboard = () => {
             </div>
           )}
         </main>
+        
+        {/* Scanner Modal */}
+        {showScanner && (
+           <div className="fixed inset-0 z-50 bg-black/90 flex items-center justify-center p-4">
+              <div className="bg-white p-6 rounded-2xl w-full max-w-sm">
+                 <div className="flex justify-between items-center mb-4">
+                    <h3 className="font-bold text-lg">Scan QR Code</h3>
+                    <button onClick={() => setShowScanner(false)}><X/></button>
+                 </div>
+                 <div id="reader" className="rounded-xl overflow-hidden border border-slate-200"></div>
+                 <p className="text-center text-slate-500 text-sm mt-4">Point your camera at a shop's QR code</p>
+              </div>
+           </div>
+        )}
       </div>
     );
   }
@@ -221,7 +319,7 @@ const StudentDashboard = () => {
               <h2 className="font-bold text-lg">Upload Documents</h2>
               <div className="flex items-center gap-2 text-xs text-slate-500 bg-slate-100 px-3 py-1.5 rounded-lg border border-slate-200">
                 <Info size={14}/>
-                Current Shop Rates: <span className="font-bold text-slate-700">B&W ₹{selectedShop.pricing.baseRate.bw}</span> / <span className="font-bold text-slate-700">Color ₹{selectedShop.pricing.baseRate.color}</span>
+                Current Rates: <span className="font-bold text-slate-700">B&W ₹{selectedShop.pricing?.bw?.single}</span> / <span className="font-bold text-slate-700">Color ₹{selectedShop.pricing?.color?.single}</span>
               </div>
             </div>
             <FileUpload onUploadComplete={handleUploadComplete} />
@@ -351,11 +449,20 @@ const StudentDashboard = () => {
                   <div className="w-2/3">
                     <p className="font-medium text-slate-800 truncate">{item.originalName}</p>
                     <p className="text-xs text-slate-500 mt-1">
-                      {item.config.color === 'color' ? 'Color' : 'B&W'} • Range: {item.config.pageRange} • {item.config.copies}x
+                      {item.config.color === 'color' ? 'Color' : 'B&W'} • {item.config.side === 'double' ? 'Duplex' : 'Single'} • {item.config.copies}x
                     </p>
                   </div>
+                  {/* Note: This simplistic client-side calc is for display only. Server is authority. */}
                   <span className="font-bold text-slate-700">
-                     ₹{((item.config.color === 'bw' ? selectedShop.pricing.baseRate.bw : selectedShop.pricing.baseRate.color) * item.pageCount * item.config.copies).toFixed(2)}
+                     ₹{(() => {
+                        const isCol = item.config.color === 'color';
+                        const isDbl = item.config.side === 'double';
+                        // We use standard rates here for display, bulk is applied at total usually or complex logic
+                        const rate = isCol 
+                           ? (isDbl ? selectedShop.pricing.color.double : selectedShop.pricing.color.single)
+                           : (isDbl ? selectedShop.pricing.bw.double : selectedShop.pricing.bw.single);
+                        return (rate * item.pageCount * item.config.copies).toFixed(2);
+                     })()}
                   </span>
                 </div>
               ))}
@@ -366,6 +473,12 @@ const StudentDashboard = () => {
                 <span className="text-slate-500">Total Amount</span>
                 <span className="text-3xl font-bold text-slate-900">₹{calculateTotal().toFixed(2)}</span>
               </div>
+              
+              {selectedShop.pricing.bulkDiscount?.enabled && (
+                 <p className="text-xs text-green-600 text-center mb-4">
+                    Bulk Discount applied for orders over {selectedShop.pricing.bulkDiscount.threshold} pages!
+                 </p>
+              )}
 
               <button 
                 onClick={handleCheckout}

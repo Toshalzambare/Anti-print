@@ -1,3 +1,4 @@
+import React, { useContext } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import Login from './pages/Login';
 import RegisterShop from './pages/RegisterShop';
@@ -5,12 +6,11 @@ import RegisterStudent from './pages/RegisterStudent';
 import ShopSetup from './pages/ShopSetup';
 import ShopDashboard from './pages/ShopDashboard';
 import StudentDashboard from './pages/StudentDashboard';
-import { useContext } from 'react';
 import { AuthContext } from './context/AuthContext';
 import ShopSettings from './pages/ShopSettings';
 
 // Simple Route Protection Component
-const ProtectedRoute = ({ children, allowedRoles }: { children: JSX.Element, allowedRoles: string[] }) => {
+const ProtectedRoute = ({ children, allowedRoles }: { children: React.ReactNode, allowedRoles: string[] }) => {
   const { user, isLoading } = useContext(AuthContext)!;
 
   if (isLoading) return <div>Loading...</div>;

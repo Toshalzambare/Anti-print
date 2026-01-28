@@ -1,117 +1,201 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import api from '../services/api';
 import toast from 'react-hot-toast';
-import { Save, IndianRupee, ArrowLeft, Settings } from 'lucide-react';
+import { ArrowLeft, Save, DollarSign, Package } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
 const ShopSettings = () => {
   const navigate = useNavigate();
-  const [loading, setLoading] = useState(false);
-  const [rates, setRates] = useState({ bw: 0, color: 0 });
-
-  // 1. Load current prices on mount
+  const [loading, setLoading] = useState(true);
+  const [shop, setShop] = useState<any>(null);
+  
+  // Pricing State
+  const [bw, setBw] = useState({ single: 0, double: 0 });
+  const [color, setColor] = useState({ single: 0, double: 0 });
+  const [bulk, setBulk] = useState({ enabled: false, threshold: 100, bwPrice: 0, colorPrice: 0 });
+  
   useEffect(() => {
-    api.get('/shops/my-shop')
-      .then(({ data }) => {
-        setRates({
-          bw: data.pricing.baseRate.bw,
-          color: data.pricing.baseRate.color
-        });
-      })
-      .catch(() => toast.error('Could not load current prices'));
+    fetchShopData();
   }, []);
 
-  // 2. Save new prices
-  const handleSave = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setLoading(true);
+  const fetchShopData = async () => {
     try {
-      await api.put('/shops/pricing', rates);
-      toast.success('Prices updated successfully!');
-    } catch (err) {
-      toast.error('Failed to update prices');
-    } finally {
+      const { data } = await api.get('/shops/my-shop');
+      setShop(data);
+      setBw(data.pricing.bw || { single: 3, double: 2 });
+      setColor(data.pricing.color || { single: 10, double: 8 });
+      setBulk(data.pricing.bulkDiscount || { enabled: false, threshold: 100, bwPrice: 1.5, colorPrice: 8 });
+      setLoading(false);
+    } catch (error) {
+      toast.error('Failed to load settings');
       setLoading(false);
     }
   };
 
+  const handleSavePricing = async () => {
+    try {
+      await api.put('/shops/pricing', {
+        bw,
+        color,
+        bulkDiscount: bulk
+      });
+      toast.success('Pricing updated successfully');
+    } catch (error) {
+      toast.error('Failed to update pricing');
+    }
+  };
+
+  if (loading) return <div className="p-10 text-center">Loading...</div>;
+
   return (
-    <div className="min-h-screen bg-slate-50 p-6">
-      <div className="max-w-2xl mx-auto">
+    <div className="min-h-screen bg-slate-50">
+      <header className="bg-white border-b border-slate-200 px-6 py-4 flex items-center gap-4 sticky top-0 z-10">
+        <button onClick={() => navigate('/shop/dashboard')} className="p-2 hover:bg-slate-100 rounded-full text-slate-500">
+          <ArrowLeft size={20} />
+        </button>
+        <div>
+           <h1 className="text-xl font-bold text-slate-800">Shop Settings</h1>
+           {shop && <p className="text-xs text-slate-500">{shop.name}</p>}
+        </div>
+      </header>
+
+      <main className="max-w-4xl mx-auto p-6 space-y-8">
         
-        {/* Header */}
-        <div className="flex items-center gap-4 mb-8">
-          <button onClick={() => navigate('/shop/dashboard')} className="p-2 hover:bg-white rounded-full transition-colors">
-            <ArrowLeft size={24} className="text-slate-600" />
-          </button>
-          <h1 className="text-2xl font-bold text-slate-800 flex items-center gap-2">
-            <Settings className="text-primary" /> Configuration
-          </h1>
-        </div>
-
-        {/* Pricing Card */}
-        <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
-          <div className="p-6 border-b border-slate-100 bg-slate-50/50">
-            <h2 className="font-bold text-lg text-slate-800">Pricing Engine</h2>
-            <p className="text-sm text-slate-500">Set the base cost per page for students.</p>
+        {/* Standard Rates */}
+        <section className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
+          <div className="flex items-center gap-3 mb-6 pb-4 border-b border-slate-100">
+            <div className="p-3 bg-green-100 text-green-700 rounded-xl">
+              <DollarSign size={24} />
+            </div>
+            <div>
+              <h2 className="text-lg font-bold text-slate-900">Standard Rates</h2>
+              <p className="text-sm text-slate-500">Set explicit prices for Single vs Double sided prints.</p>
+            </div>
           </div>
-          
-          <form onSubmit={handleSave} className="p-8 space-y-6">
-            
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-              {/* Black & White Input */}
-              <div className="relative group">
-                <label className="block text-xs font-bold text-slate-500 uppercase mb-2 tracking-wide">Black & White Rate</label>
-                <div className="relative">
-                  <IndianRupee size={18} className="absolute left-3 top-3.5 text-slate-400 group-focus-within:text-primary-hover transition-colors" />
-                  <input 
-                    type="number" 
-                    step="0.1" // Allow decimals (e.g. 1.5 rupees)
-                    className="input-field pl-10 text-lg font-bold text-slate-800"
-                    value={rates.bw}
-                    onChange={e => setRates({...rates, bw: parseFloat(e.target.value)})}
-                  />
-                </div>
-                <p className="text-xs text-slate-400 mt-2">Cost per single side</p>
-              </div>
 
-              {/* Color Input */}
-              <div className="relative group">
-                <label className="block text-xs font-bold text-slate-500 uppercase mb-2 tracking-wide">Color Rate</label>
-                <div className="relative">
-                  <IndianRupee size={18} className="absolute left-3 top-3.5 text-slate-400 group-focus-within:text-pink-500 transition-colors" />
-                  <input 
-                    type="number" 
-                    step="0.5"
-                    className="input-field pl-10 text-lg font-bold text-slate-800 focus:border-pink-500 focus:ring-pink-200"
-                    value={rates.color}
-                    onChange={e => setRates({...rates, color: parseFloat(e.target.value)})}
-                  />
-                </div>
-                <p className="text-xs text-slate-400 mt-2">Cost per single side</p>
-              </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+            {/* Black & White */}
+            <div className="space-y-4">
+               <h3 className="font-bold text-slate-700 flex items-center gap-2">
+                 <div className="w-3 h-3 bg-slate-800 rounded-full"></div> Black & White
+               </h3>
+               <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-xs font-bold text-slate-400 uppercase mb-1 block">Single Side</label>
+                    <div className="relative">
+                       <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">₹</span>
+                       <input 
+                        type="number" step="0.1" min="0" className="input-field pl-6"
+                        value={bw.single} onChange={e => setBw({...bw, single: parseFloat(e.target.value)})}
+                       />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="text-xs font-bold text-slate-400 uppercase mb-1 block">Double Side</label>
+                    <div className="relative">
+                       <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">₹</span>
+                       <input 
+                        type="number" step="0.1" min="0" className="input-field pl-6"
+                        value={bw.double} onChange={e => setBw({...bw, double: parseFloat(e.target.value)})}
+                       />
+                    </div>
+                  </div>
+               </div>
             </div>
 
-            <div className="pt-6 border-t border-slate-100 flex justify-end">
-              <button 
-                type="submit" 
-                disabled={loading}
-                className="btn btn-primary font-bold px-8"
-              >
-                {loading ? 'Saving...' : 'Update Prices'}
-                {!loading && <Save size={18} />}
-              </button>
+            {/* Color */}
+            <div className="space-y-4">
+               <h3 className="font-bold text-pink-600 flex items-center gap-2">
+                 <div className="w-3 h-3 bg-pink-500 rounded-full"></div> Color
+               </h3>
+               <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-xs font-bold text-slate-400 uppercase mb-1 block">Single Side</label>
+                    <div className="relative">
+                       <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">₹</span>
+                       <input 
+                        type="number" step="0.1" min="0" className="input-field pl-6"
+                        value={color.single} onChange={e => setColor({...color, single: parseFloat(e.target.value)})}
+                       />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="text-xs font-bold text-slate-400 uppercase mb-1 block">Double Side</label>
+                    <div className="relative">
+                       <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">₹</span>
+                       <input 
+                        type="number" step="0.1" min="0" className="input-field pl-6"
+                        value={color.double} onChange={e => setColor({...color, double: parseFloat(e.target.value)})}
+                       />
+                    </div>
+                  </div>
+               </div>
             </div>
+          </div>
+        </section>
 
-          </form>
+        {/* Bulk Discounts */}
+        <section className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
+          <div className="flex items-center justify-between mb-6 pb-4 border-b border-slate-100">
+            <div className="flex items-center gap-3">
+              <div className="p-3 bg-blue-100 text-blue-700 rounded-xl">
+                <Package size={24} />
+              </div>
+              <div>
+                <h2 className="text-lg font-bold text-slate-900">Bulk Discounts</h2>
+                <p className="text-sm text-slate-500">Offer lower rates for large documents.</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+               <span className="text-sm font-bold text-slate-600">Enable</span>
+               <button 
+                 onClick={() => setBulk({...bulk, enabled: !bulk.enabled})}
+                 className={`w-12 h-6 rounded-full transition-colors relative ${bulk.enabled ? 'bg-primary' : 'bg-slate-300'}`}
+               >
+                 <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${bulk.enabled ? 'left-7' : 'left-1'}`} />
+               </button>
+            </div>
+          </div>
+
+          <div className={`grid grid-cols-1 md:grid-cols-3 gap-6 transition-opacity ${bulk.enabled ? 'opacity-100' : 'opacity-40 pointer-events-none'}`}>
+             <div>
+                <label className="block text-sm font-medium text-slate-700 mb-2">Page Threshold</label>
+                <input 
+                  type="number" min="10" className="input-field"
+                  value={bulk.threshold} onChange={e => setBulk({...bulk, threshold: parseInt(e.target.value)})}
+                />
+                <p className="text-xs text-slate-400 mt-1">Min. pages to trigger discount</p>
+             </div>
+             <div>
+                <label className="block text-sm font-medium text-slate-700 mb-2">Discounted B&W Rate</label>
+                <div className="relative">
+                   <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">₹</span>
+                   <input 
+                    type="number" step="0.1" className="input-field pl-6"
+                    value={bulk.bwPrice} onChange={e => setBulk({...bulk, bwPrice: parseFloat(e.target.value)})}
+                   />
+                </div>
+             </div>
+             <div>
+                <label className="block text-sm font-medium text-slate-700 mb-2">Discounted Color Rate</label>
+                <div className="relative">
+                   <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">₹</span>
+                   <input 
+                    type="number" step="0.1" className="input-field pl-6"
+                    value={bulk.colorPrice} onChange={e => setBulk({...bulk, colorPrice: parseFloat(e.target.value)})}
+                   />
+                </div>
+             </div>
+          </div>
+        </section>
+
+        <div className="flex justify-end">
+            <button onClick={handleSavePricing} className="btn btn-primary flex items-center gap-2 px-8 py-3 text-lg">
+              <Save size={20} /> Save Changes
+            </button>
         </div>
 
-        {/* Info Box */}
-        <div className="mt-6 bg-blue-50 text-blue-800 p-4 rounded-xl text-sm border border-blue-100">
-          <strong>Tip:</strong> These prices update instantly for all <b>new</b> orders. Existing orders in the queue will keep their old price.
-        </div>
-
-      </div>
+      </main>
     </div>
   );
 };

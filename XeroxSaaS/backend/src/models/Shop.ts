@@ -9,14 +9,22 @@ export interface IShop extends Document {
     type: string;
     coordinates: number[];
   };
+  image?: string; // Shop Profile Photo URL
   status: 'OPEN' | 'CLOSED' | 'BUSY';
   pricing: {
-    baseRate: {
-      bw: number;
-      color: number;
+    bw: {
+      single: number;
+      double: number;
     };
-    multipliers: {
-      doubleSide: number;
+    color: {
+      single: number;
+      double: number;
+    };
+    bulkDiscount: {
+      enabled: boolean;
+      threshold: number; // e.g., 100 pages
+      bwPrice: number;   // e.g., 1.5
+      colorPrice: number; // e.g., 8
     };
   };
 }
@@ -30,18 +38,26 @@ const ShopSchema = new Schema<IShop>({
     type: { type: String, default: 'Point' },
     coordinates: { type: [Number], default: [0, 0] } 
   },
+  image: { type: String },
   status: { 
     type: String, 
     enum: ['OPEN', 'CLOSED', 'BUSY'], 
     default: 'OPEN' 
   },
   pricing: {
-    baseRate: {
-      bw: { type: Number, default: 2.0 },
-      color: { type: Number, default: 10.0 }
+    bw: {
+      single: { type: Number, default: 3.0 },
+      double: { type: Number, default: 2.0 }
     },
-    multipliers: {
-      doubleSide: { type: Number, default: 0.8 } 
+    color: {
+      single: { type: Number, default: 10.0 },
+      double: { type: Number, default: 8.0 }
+    },
+    bulkDiscount: {
+      enabled: { type: Boolean, default: false },
+      threshold: { type: Number, default: 100 },
+      bwPrice: { type: Number, default: 1.5 },
+      colorPrice: { type: Number, default: 8.0 }
     }
   }
 }, { timestamps: true });

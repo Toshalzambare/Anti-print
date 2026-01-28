@@ -24,8 +24,9 @@ export const createShop = async (req: AuthRequest, res: Response): Promise<void>
       address,
       location,
       pricing: {
-        baseRate: { bw: 2, color: 10 }, // Defaults
-        multipliers: { doubleSide: 0.8 }
+        bw: { single: 3, double: 2 },
+        color: { single: 10, double: 8 },
+        bulkDiscount: { enabled: false, threshold: 100, bwPrice: 1.5, colorPrice: 8 }
       }
     });
 
@@ -131,15 +132,15 @@ export const toggleShopStatus = async (req: AuthRequest, res: Response): Promise
 // @access  Private (Owner)
 export const updatePricing = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
-    const { bw, color } = req.body;
+    const { bw, color, bulkDiscount } = req.body;
 
-    // Use findOneAndUpdate to avoid validation errors
     const updatedShop = await Shop.findOneAndUpdate(
       { owner: req.user?._id },
       { 
         $set: { 
-          'pricing.baseRate.bw': bw, 
-          'pricing.baseRate.color': color 
+          'pricing.bw': bw, 
+          'pricing.color': color,
+          'pricing.bulkDiscount': bulkDiscount
         } 
       },
       { new: true }

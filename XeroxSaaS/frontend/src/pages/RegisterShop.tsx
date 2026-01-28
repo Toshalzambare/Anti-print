@@ -17,7 +17,7 @@ const RegisterShop = () => {
 
     try {
       // 1. Register the User (Owner)
-      const { data } = await api.post('/auth/register-shop', formData);
+      await api.post('/auth/register-shop', formData);
       
       // 2. Auto Login
       // Note: The backend register endpoint usually returns the user info but maybe not the token immediately

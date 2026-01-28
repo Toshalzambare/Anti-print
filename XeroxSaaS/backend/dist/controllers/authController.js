@@ -16,6 +16,10 @@ exports.googleLogin = exports.loginUser = exports.registerShopOwner = exports.re
 const bcryptjs_1 = __importDefault(require("bcryptjs"));
 const User_1 = __importDefault(require("../models/User"));
 const generateToken_1 = __importDefault(require("../utils/generateToken"));
+const google_auth_library_1 = require("google-auth-library");
+// Allow using the same VITE_ variable for backend convenience, or standard GOOGLE_CLIENT_ID
+const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || process.env.VITE_GOOGLE_CLIENT_ID;
+const client = new google_auth_library_1.OAuth2Client(GOOGLE_CLIENT_ID);
 // @desc    Register a new Student
 // @route   POST /api/auth/register-student
 // @access  Public
@@ -140,24 +144,43 @@ const loginUser = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     }
 });
 exports.loginUser = loginUser;
-// @desc    Google Login (Mock/Real)
+// @desc    Google Login (Real Verification)
 // @route   POST /api/auth/google
 // @access  Public
 const googleLogin = (req, res) => __awaiter(void 0, void 0, void 0, function* () {
     try {
-        const { name, email, googleId } = req.body;
-        // 1. Check if user exists
+        const { credential } = req.body; // The JWT token from Google
+        if (!credential) {
+            res.status(400).json({ message: 'No credential provided' });
+            return;
+        }
+        // 1. Verify Token with Google
+        const ticket = yield client.verifyIdToken({
+            idToken: credential,
+            audience: GOOGLE_CLIENT_ID
+        });
+        const payload = ticket.getPayload();
+        if (!payload) {
+            res.status(400).json({ message: 'Invalid Google Token' });
+            return;
+        }
+        const { email, name, sub: googleId } = payload;
+        if (!email) {
+            res.status(400).json({ message: 'Email access required' });
+            return;
+        }
+        // 2. Check if user exists
         let user = yield User_1.default.findOne({ email });
         if (!user) {
-            // 2. Register new student automatically
+            // 3. Register new student automatically
             user = yield User_1.default.create({
-                name,
+                name: name || 'Student',
                 email,
                 googleId,
                 role: 'STUDENT'
             });
         }
-        // 3. Generate Token
+        // 4. Generate Token
         const token = (0, generateToken_1.default)(res, user._id.toString());
         res.json({
             _id: user._id,
@@ -168,8 +191,8 @@ const googleLogin = (req, res) => __awaiter(void 0, void 0, void 0, function* ()
         });
     }
     catch (error) {
-        console.error(error);
-        res.status(500).json({ message: 'Google Login Failed' });
+        console.error('Google Auth Error:', error);
+        res.status(400).json({ message: 'Google Authentication Failed' });
     }
 });
 exports.googleLogin = googleLogin;
