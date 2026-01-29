@@ -121,10 +121,10 @@ const ShopHistory = () => {
          </div>
 
          {/* Table */}
-         <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-            <div className="overflow-x-auto">
+         <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden flex flex-col max-h-[calc(100vh-320px)]">
+            <div className="overflow-auto flex-1">
                <table className="w-full text-left border-collapse min-w-[800px]">
-                  <thead className="bg-slate-50 text-slate-500 text-xs uppercase font-semibold">
+                  <thead className="bg-slate-50 text-slate-500 text-xs uppercase font-semibold sticky top-0">
                      <tr>
                         <th className="p-4">Date</th>
                         <th className="p-4">Order ID</th>
