@@ -316,9 +316,6 @@ const ShopDashboard = () => {
              </>
 
              <button onClick={fetchOrders} className="p-2 text-slate-500 hover:text-primary-hover"><RefreshCw size={20}/></button>
-             <button onClick={toggleTheme} className="p-2 text-slate-500 hover:text-primary-hover">
-                {theme === 'light' ? <Moon size={20}/> : <Sun size={20}/>}
-             </button>
           </div>
         </header>
 
@@ -358,7 +355,7 @@ const ShopDashboard = () => {
             <div className="overflow-x-auto">
               <table className="w-full text-left border-collapse min-w-[600px]">
                 <thead className="bg-slate-50 dark:bg-slate-900 text-slate-500 dark:text-slate-400 text-xs uppercase font-semibold">
-                  <tr><th className="p-4">Order ID</th><th className="p-4">Student</th><th className="p-4">Files & Config</th><th className="p-4">Status</th><th className="p-4">Action</th></tr>
+                  <tr><th className="p-4">Order ID</th><th className="p-4">User</th><th className="p-4">Files & Config</th><th className="p-4">Status</th><th className="p-4">Action</th></tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 dark:divide-slate-700">
                   {filteredOrders.length === 0 ? (
@@ -526,7 +523,7 @@ const ShopDashboard = () => {
               <div className="bg-white p-4 rounded-xl border border-slate-200 inline-block mb-6">
                  <QRCode 
                     id="shop-qr"
-                    value={`${window.location.origin}/student/dashboard?shopId=${shop._id}`} 
+                    value={`${window.location.origin}/user/dashboard?shopId=${shop._id}`} 
                     size={200}
                     level="H"
                  />

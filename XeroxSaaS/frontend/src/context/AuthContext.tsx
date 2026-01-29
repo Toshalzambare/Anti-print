@@ -1,10 +1,10 @@
-import { createContext, useState, useEffect, type ReactNode } from 'react';
+import { createContext, useState, useEffect, type ReactNode, useMemo } from 'react';
 
 interface User {
   _id: string;
   name: string;
   email: string;
-  role: 'STUDENT' | 'OWNER' | 'EMPLOYEE';
+  role: 'USER' | 'OWNER' | 'EMPLOYEE';
 }
 
 interface AuthContextType {
@@ -43,8 +43,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     localStorage.removeItem('token');
   };
 
+  const contextValue = useMemo(() => ({
+    user, login, logout, isLoading
+  }), [user, isLoading]);
+
   return (
-    <AuthContext.Provider value={{ user, login, logout, isLoading }}>
+    <AuthContext.Provider value={contextValue}>
       {children}
     </AuthContext.Provider>
   );

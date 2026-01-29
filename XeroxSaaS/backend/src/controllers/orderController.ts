@@ -9,7 +9,7 @@ const generatePickupCode = () => Math.floor(1000 + Math.random() * 9000).toStrin
 
 // @desc    Create new print order
 // @route   POST /api/orders
-// @access  Private (Student)
+// @access  Private (User)
 export const createOrder = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const { shopId, items } = req.body;
@@ -114,7 +114,7 @@ export const createOrder = async (req: AuthRequest, res: Response): Promise<void
 
 // @desc    Initiate Payment (Mock Razorpay)
 // @route   POST /api/orders/checkout
-// @access  Private (Student)
+// @access  Private (User)
 export const createPaymentOrder = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const { orderId } = req.body;
@@ -141,7 +141,7 @@ export const createPaymentOrder = async (req: AuthRequest, res: Response): Promi
 
 // @desc    Verify Payment & Notify Shop
 // @route   POST /api/orders/verify
-// @access  Private (Student)
+// @access  Private (User)
 export const verifyPayment = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const { orderId, paymentId } = req.body;
@@ -215,12 +215,12 @@ export const updateOrderStatus = async (req: AuthRequest, res: Response): Promis
     order.orderStatus = status;
     await order.save();
 
-    // Emit Socket Event to Student
+    // Emit Socket Event to User
     const io = req.app.get('io');
     if (io) {
        // We emit to the specific User's room (if we had user rooms) or just general for MVP.
-       // Since we don't have user rooms set up in server.ts explicitly for students,
-       // we can emit to the SHOP room (which student might not be in) OR
+       // Since we don't have user rooms set up in server.ts explicitly for users,
+       // we can emit to the SHOP room (which user might not be in) OR
        // we can emit a global event and client filters it? No, that's bad.
        // Better: Let's emit to `order._id`. Client joins `order._id` room?
        // Or simpler: server.ts needs to join user to their userID room.
@@ -236,7 +236,7 @@ export const updateOrderStatus = async (req: AuthRequest, res: Response): Promis
   }
 };
 
-// @desc    Cancel Order (Student or Shop)
+// @desc    Cancel Order (User or Shop)
 // @route   PUT /api/orders/:id/cancel
 // @access  Private
 export const cancelOrder = async (req: AuthRequest, res: Response): Promise<void> => {
@@ -349,9 +349,9 @@ export const getShopHistory = async (req: AuthRequest, res: Response): Promise<v
   }
 };
 
-// @desc    Get My Orders (Student)
+// @desc    Get My Orders (User)
 // @route   GET /api/orders/my
-// @access  Private (Student)
+// @access  Private (User)
 export const getMyOrders = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const orders = await Order.find({ user: req.user?._id }).sort({ createdAt: -1 });

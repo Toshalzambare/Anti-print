@@ -10,7 +10,7 @@ interface MulterRequest extends Request {
 
 // @desc    Upload file to MinIO and get Hash
 // @route   POST /api/upload
-// @access  Private (Student)
+// @access  Private (User)
 export const uploadFile = async (req: MulterRequest, res: Response): Promise<void> => {
   try {
     if (!req.file) {

@@ -1,27 +1,22 @@
-import React, { createContext, useContext, useEffect, useState } from 'react';
+import React, { createContext, useContext } from 'react';
 
-type Theme = 'light' | 'dark';
+// Always 'light'
+type Theme = 'light';
 
 const ThemeContext = createContext<{ theme: Theme; toggleTheme: () => void } | null>(null);
 
 export const ThemeProvider = ({ children }: { children: React.ReactNode }) => {
-  const [theme, setTheme] = useState<Theme>(() => {
-    return (localStorage.getItem('theme') as Theme) || 'light';
-  });
+  // No state, no effects. Just static 'light'.
+  const theme: Theme = 'light';
+  const toggleTheme = () => { console.log('Dark mode disabled'); };
 
-  useEffect(() => {
-    const root = window.document.documentElement;
-    if (theme === 'dark') {
-      root.classList.add('dark');
-    } else {
-      root.classList.remove('dark');
-    }
-    localStorage.setItem('theme', theme);
-  }, [theme]);
-
-  const toggleTheme = () => {
-    setTheme(prev => (prev === 'light' ? 'dark' : 'light'));
-  };
+  // Ensure any lingering dark mode classes/attributes are removed on mount
+  React.useEffect(() => {
+    document.documentElement.classList.remove('dark');
+    document.documentElement.removeAttribute('data-mode');
+    document.documentElement.style.colorScheme = 'light';
+    localStorage.removeItem('theme');
+  }, []);
 
   return (
     <ThemeContext.Provider value={{ theme, toggleTheme }}>

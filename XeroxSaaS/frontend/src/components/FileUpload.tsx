@@ -116,8 +116,8 @@ const FileUpload = ({ onUploadComplete, shopId }: FileUploadProps) => {
         onDrop={handleDrop}
         className={`
           relative border-2 border-dashed rounded-xl p-8 flex flex-col items-center justify-center transition-all duration-200
-          ${isDragging ? 'border-primary bg-primary/10 scale-[1.02]' : 'border-slate-300 bg-slate-50'}
-          ${uploading ? 'opacity-50 cursor-wait' : 'cursor-pointer hover:border-primary hover:bg-white'}
+          ${isDragging ? 'border-primary bg-primary/10 dark:bg-primary/20 scale-[1.02]' : 'border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-800/50'}
+          ${uploading ? 'opacity-50 cursor-wait' : 'cursor-pointer hover:border-primary hover:bg-white dark:hover:bg-slate-800'}
         `}
       >
         <input 
@@ -133,19 +133,19 @@ const FileUpload = ({ onUploadComplete, shopId }: FileUploadProps) => {
         {uploading ? (
           <div className="text-center">
             <Loader2 className="animate-spin text-primary mx-auto mb-3" size={40} />
-            <p className="font-medium text-slate-700">Uploading & Encrypting...</p>
+            <p className="font-medium text-slate-700 dark:text-slate-300">Uploading & Encrypting...</p>
           </div>
         ) : (
           <div className="text-center">
-            <div className="flex justify-center gap-3 mb-3 text-slate-400">
+            <div className="flex justify-center gap-3 mb-3 text-slate-400 dark:text-slate-500">
               <UploadCloud size={40} />
             </div>
-            <p className="font-medium text-lg text-slate-700">
+            <p className="font-medium text-lg text-slate-700 dark:text-slate-200">
               {isDragging ? 'Drop files here' : 'Drag & Drop files here'}
             </p>
-            <p className="text-sm text-slate-500 mt-1">or click to browse</p>
+            <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">or click to browse</p>
             
-            <div className="flex gap-2 justify-center mt-4 text-xs text-slate-400 bg-white py-1 px-3 rounded-full border border-slate-200 w-fit mx-auto">
+            <div className="flex gap-2 justify-center mt-4 text-xs text-slate-400 dark:text-slate-500 bg-white dark:bg-slate-800 py-1 px-3 rounded-full border border-slate-200 dark:border-slate-700 w-fit mx-auto">
               <span>PDF</span><span>DOC</span><span>PPT</span><span>IMG</span>
             </div>
           </div>
@@ -153,7 +153,7 @@ const FileUpload = ({ onUploadComplete, shopId }: FileUploadProps) => {
       </div>
 
       {error && (
-        <div className="flex items-center gap-2 mt-3 text-red-500 text-sm bg-red-50 p-2 rounded-lg">
+        <div className="flex items-center gap-2 mt-3 text-red-500 text-sm bg-red-50 dark:bg-red-900/20 p-2 rounded-lg">
           <AlertCircle size={16} /> {error}
         </div>
       )}

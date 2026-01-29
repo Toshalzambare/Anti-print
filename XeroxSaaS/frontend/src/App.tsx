@@ -3,10 +3,10 @@ import { Routes, Route, Navigate } from 'react-router-dom';
 import Login from './pages/Login';
 import Landing from './pages/Landing'; // Import Landing
 import RegisterShop from './pages/RegisterShop';
-import RegisterStudent from './pages/RegisterStudent';
+import RegisterUser from './pages/RegisterUser';
 import ShopSetup from './pages/ShopSetup';
 import ShopDashboard from './pages/ShopDashboard';
-import StudentDashboard from './pages/StudentDashboard';
+import UserDashboard from './pages/UserDashboard';
 import { AuthContext } from './context/AuthContext';
 import ShopSettings from './pages/ShopSettings';
 import ShopHistory from './pages/ShopHistory'; // Import History
@@ -28,7 +28,7 @@ function App() {
       <Route path="/" element={<Landing />} />
       <Route path="/login" element={<Login />} />
       <Route path="/register-shop" element={<RegisterShop />} />
-      <Route path="/register-student" element={<RegisterStudent />} />
+      <Route path="/register-user" element={<RegisterUser />} />
 
       {/* Protected Routes for Shop Owners */}
       <Route path="/shop/setup" element={
@@ -49,7 +49,7 @@ function App() {
         </ProtectedRoute>
       } />
 
-      <Route path="/student/dashboard" element={<StudentDashboard />} />
+      <Route path="/user/dashboard" element={<UserDashboard />} />
       <Route path="/shop/settings" element={
         <ProtectedRoute allowedRoles={['OWNER']}>
           <ShopSettings />

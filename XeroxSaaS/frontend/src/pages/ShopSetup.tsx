@@ -142,7 +142,7 @@ const ShopSetup = () => {
             <Store className="mb-4 text-primary" size={40} />
             <h2 className="text-xl font-bold">One last step</h2>
             <p className="text-slate-400 text-sm mt-2">
-              Tell students where to find you. Your shop will appear in search results immediately.
+              Tell users where to find you. Your shop will appear in search results immediately.
             </p>
           </div>
         </div>

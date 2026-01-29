@@ -7,7 +7,7 @@ import { Store, User, ArrowRight, Loader2, KeyRound } from 'lucide-react';
 import { GoogleLogin } from '@react-oauth/google';
 
 const Login = () => {
-  const [activeTab, setActiveTab] = useState<'student' | 'shop'>('student');
+  const [activeTab, setActiveTab] = useState<'user' | 'shop'>('user');
   
   // Shop State
   const [email, setEmail] = useState('');
@@ -22,9 +22,9 @@ const Login = () => {
      const params = new URLSearchParams(window.location.search);
      const shopId = params.get('shopId');
      if (shopId) {
-        navigate(`/student/dashboard?shopId=${shopId}`);
+        navigate(`/user/dashboard?shopId=${shopId}`);
      } else {
-        navigate(activeTab === 'student' ? '/student/dashboard' : '/shop/dashboard');
+        navigate(activeTab === 'user' ? '/user/dashboard' : '/shop/dashboard');
      }
   };
 
@@ -51,7 +51,7 @@ const Login = () => {
     }
   };
 
-  // --- 2. Student Login (Real Google Auth) ---
+  // --- 2. User Login (Real Google Auth) ---
   const handleGoogleSuccess = async (credentialResponse: any) => {
     setLoading(true);
     try {
@@ -99,13 +99,13 @@ const Login = () => {
 
           {/* Role Tabs */}
           <div className="grid grid-cols-2 gap-2 p-1 bg-slate-100 rounded-xl mb-8">
-            <button 
-              onClick={() => setActiveTab('student')}
+            <button
+              onClick={() => setActiveTab('user')}
               className={`flex items-center justify-center gap-2 py-2.5 text-sm font-bold rounded-lg transition-all
-                ${activeTab === 'student' ? 'bg-white shadow text-slate-800' : 'text-slate-500 hover:text-slate-700'}
+                ${activeTab === 'user' ? 'bg-white shadow text-slate-800' : 'text-slate-500 hover:text-slate-700'}
               `}
             >
-              <User size={18}/> Student
+              <User size={18}/> User
             </button>
             <button 
               onClick={() => setActiveTab('shop')}
@@ -117,10 +117,10 @@ const Login = () => {
             </button>
           </div>
 
-          {activeTab === 'student' ? (
+          {activeTab === 'user' ? (
             <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-300">
               <div className="bg-blue-50 p-4 rounded-xl border border-blue-100 text-center">
-                <p className="text-blue-800 font-medium">Students login exclusively via Google.</p>
+                <p className="text-blue-800 font-medium">Users login exclusively via Google.</p>
                 <p className="text-blue-600 text-sm mt-1">No password required.</p>
               </div>
 

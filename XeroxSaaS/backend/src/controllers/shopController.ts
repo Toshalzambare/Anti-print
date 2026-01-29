@@ -90,7 +90,7 @@ export const getMyShop = async (req: AuthRequest, res: Response): Promise<void> 
   }
 };
 
-// @desc    Get ALL Shops (For Students)
+// @desc    Get ALL Shops (For Users)
 // @route   GET /api/shops
 // @access  Public
 export const getAllShops = async (req: Request, res: Response): Promise<void> => {

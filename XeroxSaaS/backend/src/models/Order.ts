@@ -29,7 +29,7 @@ export interface IOrder extends Document {
   orderStatus: 'QUEUED' | 'PRINTING' | 'READY' | 'COMPLETED' | 'CANCELLED';
   
   // Security
-  pickupCode: string; // A 4-digit code the student shows to collect
+  pickupCode: string; // A 4-digit code the user shows to collect
 }
 
 const OrderSchema = new Schema<IOrder>({

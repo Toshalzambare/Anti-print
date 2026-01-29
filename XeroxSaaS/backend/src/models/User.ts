@@ -4,10 +4,10 @@ import mongoose, { Document, Schema } from 'mongoose';
 export interface IUser extends Document {
   name: string;
   email: string;
-  role: 'STUDENT' | 'OWNER' | 'EMPLOYEE';
-  
+  role: 'USER' | 'OWNER' | 'EMPLOYEE';
+
   // Auth Fields
-  googleId?: string;       // For Students
+  googleId?: string;       // For Users
   password?: string;       // For Shop Owners/Employees
   
   // Relationships
@@ -19,10 +19,10 @@ export interface IUser extends Document {
 const UserSchema = new Schema<IUser>({
   name: { type: String, required: true },
   email: { type: String, required: true, unique: true },
-  role: { 
-    type: String, 
-    enum: ['STUDENT', 'OWNER', 'EMPLOYEE'], 
-    default: 'STUDENT' 
+  role: {
+    type: String,
+    enum: ['USER', 'OWNER', 'EMPLOYEE'],
+    default: 'USER'
   },
   
   googleId: { type: String, select: false }, // Hidden by default for security

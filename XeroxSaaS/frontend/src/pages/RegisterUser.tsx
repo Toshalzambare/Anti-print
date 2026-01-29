@@ -5,7 +5,7 @@ import api from '../services/api';
 import toast from 'react-hot-toast';
 import { ArrowRight, Loader2, Store } from 'lucide-react';
 
-const RegisterStudent = () => {
+const RegisterUser = () => {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -19,11 +19,11 @@ const RegisterStudent = () => {
     setLoading(true);
     
     try {
-      const { data } = await api.post('/auth/register-student', { name, email, password });
+      const { data } = await api.post('/auth/register-user', { name, email, password });
       
       // Auto login after registration
       login(data, data.token); // Note: Registration might not return token depending on implementation, but typically it should or we login manually. 
-      // Checking backend: registerStudent returns token in res.json() calls generateToken(res, ...) but wait, generateToken in controller sets cookie or returns generic?
+      // Checking backend: registerUser returns token in res.json() calls generateToken(res, ...) but wait, generateToken in controller sets cookie or returns generic?
       // Let's check authController again. It calls generateToken(res, id). 
       // Wait, standard generateToken usually sends a cookie OR returns it. 
       // In registerShopOwner: generateToken(res, user._id.toString()); res.status(201).json({...})
@@ -31,7 +31,7 @@ const RegisterStudent = () => {
       // If it's cookie only, `data.token` might be undefined.
       // But `loginUser` returns `token: token`. 
       // `registerShopOwner` does NOT return `token` in the JSON body in the code I read earlier. 
-      // I should fix backend `registerStudent` to return token if `loginUser` does, or rely on cookie.
+      // I should fix backend `registerUser` to return token if `loginUser` does, or rely on cookie.
       // `api.ts` checks `localStorage.getItem('token')`. So we need the token in the body.
       
       // Let's assume I need to fix the backend first if it doesn't return token. 
@@ -41,7 +41,7 @@ const RegisterStudent = () => {
       // I will implement this file, then check backend utility.
 
       toast.success(`Welcome, ${data.name}!`);
-      navigate('/student/dashboard');
+      navigate('/user/dashboard');
 
     } catch (error: any) {
       toast.error(error.response?.data?.message || 'Registration failed');
@@ -60,7 +60,7 @@ const RegisterStudent = () => {
             XeroxSaaS
           </h1>
           <p className="mt-4 text-purple-100 text-lg">
-            Join thousands of students printing smarter.
+            Join thousands of users printing smarter.
           </p>
         </div>
         
@@ -76,7 +76,7 @@ const RegisterStudent = () => {
         <div className="w-full max-w-md space-y-8">
           <div className="text-center md:text-left">
             <h2 className="text-3xl font-bold text-slate-900">Create Account</h2>
-            <p className="mt-2 text-slate-500">Sign up as a Student</p>
+            <p className="mt-2 text-slate-500">Sign up as a User</p>
           </div>
 
           <form onSubmit={handleRegister} className="space-y-4">
@@ -97,7 +97,7 @@ const RegisterStudent = () => {
                 type="email" 
                 required
                 className="input-field"
-                placeholder="student@university.edu"
+                placeholder="user@example.com"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
               />
@@ -136,4 +136,4 @@ const RegisterStudent = () => {
   );
 };
 
-export default RegisterStudent;
+export default RegisterUser;

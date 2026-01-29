@@ -1,10 +1,10 @@
 import express from 'express';
-import { registerShopOwner, loginUser, registerStudent, googleLogin } from '../controllers/authController';
+import { registerShopOwner, loginUser, registerUser, googleLogin } from '../controllers/authController';
 
 const router = express.Router();
 
 router.post('/register-shop', registerShopOwner);
-router.post('/register-student', registerStudent);
+router.post('/register-user', registerUser);
 router.post('/login', loginUser);
 router.post('/google', googleLogin);
 

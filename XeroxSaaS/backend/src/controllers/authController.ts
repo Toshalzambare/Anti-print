@@ -8,10 +8,10 @@ import { OAuth2Client } from 'google-auth-library';
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || process.env.VITE_GOOGLE_CLIENT_ID;
 const client = new OAuth2Client(GOOGLE_CLIENT_ID);
 
-// @desc    Register a new Student
-// @route   POST /api/auth/register-student
+// @desc    Register a new User
+// @route   POST /api/auth/register-user
 // @access  Public
-export const registerStudent = async (req: Request, res: Response): Promise<void> => {
+export const registerUser = async (req: Request, res: Response): Promise<void> => {
   try {
     const { name, email, password } = req.body;
 
@@ -32,12 +32,12 @@ export const registerStudent = async (req: Request, res: Response): Promise<void
     const salt = await bcrypt.genSalt(10);
     const hashedPassword = await bcrypt.hash(password, salt);
 
-    // 4. Create User (Role: STUDENT)
+    // 4. Create User (Role: USER)
     const user = await User.create({
       name,
       email,
       password: hashedPassword,
-      role: 'STUDENT'
+      role: 'USER'
     });
 
     if (user) {
@@ -48,7 +48,7 @@ export const registerStudent = async (req: Request, res: Response): Promise<void
         email: user.email,
         role: user.role,
         token: token,
-        message: 'Student registered successfully'
+        message: 'User registered successfully'
       });
     } else {
       res.status(400).json({ message: 'Invalid user data' });
@@ -174,12 +174,12 @@ export const googleLogin = async (req: Request, res: Response): Promise<void> =>
     let user = await User.findOne({ email });
 
     if (!user) {
-      // 3. Register new student automatically
+      // 3. Register new user automatically
       user = await User.create({
-        name: name || 'Student',
+        name: name || 'User',
         email,
         googleId,
-        role: 'STUDENT'
+        role: 'USER'
       });
     }
 
