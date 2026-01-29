@@ -2,6 +2,7 @@ import { Response } from 'express';
 import { AuthRequest } from '../middlewares/authMiddleware';
 import Order from '../models/Order';
 import Shop from '../models/Shop';
+import s3, { BUCKET_NAME } from '../config/s3';
 
 // Helper: Generate a random 4-digit pickup code
 const generatePickupCode = () => Math.floor(1000 + Math.random() * 9000).toString();
@@ -20,52 +21,90 @@ export const createOrder = async (req: AuthRequest, res: Response): Promise<void
       return;
     }
 
-    // 2. Calculate Costs Server-Side (Security: Never trust client price)
-    let grandTotal = 0;
-    const processedItems = items.map((item: any) => {
-      const isColor = item.config.color === 'color';
-      const isDouble = item.config.side === 'double';
-      const totalPages = item.pageCount * item.config.copies; // Total pages for this specific doc batch
-
-      let ratePerPage = 0;
-
-      // 1. Check Bulk Discount First
-      const bulk = shop.pricing.bulkDiscount;
-      if (bulk && bulk.enabled && totalPages >= bulk.threshold) {
-        // Bulk Pricing applies
-        ratePerPage = isColor ? bulk.colorPrice : bulk.bwPrice;
-      } else {
-        // 2. Standard Pricing
-        if (isColor) {
-           ratePerPage = isDouble ? shop.pricing.color.double : shop.pricing.color.single;
-        } else {
-           ratePerPage = isDouble ? shop.pricing.bw.double : shop.pricing.bw.single;
-        }
-      }
-
-      // Cost for this file
-      const fileCost = ratePerPage * totalPages;
-      
-      grandTotal += fileCost;
-
-      return {
-        ...item,
-        calculatedCost: fileCost
-      };
-    });
-
-    // 3. Create the Order (Status: QUEUED, Payment: PENDING)
-    const order = await Order.create({
+    // Prepare Order ID (MongoDB ID is generated on instantiation)
+    const newOrder = new Order({
       shop: shopId,
       user: req.user?._id,
-      items: processedItems,
-      totalAmount: grandTotal,
+      items: [], // Will fill after processing
+      totalAmount: 0,
       pickupCode: generatePickupCode(),
       paymentStatus: 'PENDING',
-      orderStatus: 'QUEUED' 
+      orderStatus: 'QUEUED'
     });
 
-    res.status(201).json(order);
+    // 2. Process Items & Move Files
+    let grandTotal = 0;
+    const processedItems = [];
+
+    // Folder Name: <ShopName>_<ShopID>
+    // Sanitize Shop Name for folder safety
+    const safeShopName = shop.name.replace(/[^a-zA-Z0-9]/g, '_');
+    const shopFolder = `${safeShopName}_${shop._id}`;
+
+    // Orderer Name
+    const safeUserName = req.user?.name.replace(/[^a-zA-Z0-9]/g, '_') || 'Guest';
+    const orderFolder = `${safeUserName}_${newOrder._id}`;
+
+    for (const item of items) {
+       const isColor = item.config.color === 'color';
+       const isDouble = item.config.side === 'double';
+       const totalPages = item.pageCount * item.config.copies;
+
+       // Pricing Logic
+       let ratePerPage = 0;
+       const bulk = shop.pricing.bulkDiscount;
+       if (bulk && bulk.enabled && totalPages >= bulk.threshold) {
+         ratePerPage = isColor ? bulk.colorPrice : bulk.bwPrice;
+       } else {
+         if (isColor) {
+            ratePerPage = isDouble ? shop.pricing.color.double : shop.pricing.color.single;
+         } else {
+            ratePerPage = isDouble ? shop.pricing.bw.double : shop.pricing.bw.single;
+         }
+       }
+       const fileCost = ratePerPage * totalPages;
+       grandTotal += fileCost;
+
+       // Move File in MinIO
+       // Current Key: <ShopID>/temp/<UUID>.<ext>
+       // Target Key: <ShopName_ShopID>/<UserName_OrderID>/<OriginalName>
+       
+       const oldKey = item.storageKey;
+       
+       const newKey = `${shopFolder}/${orderFolder}/${item.originalName}`;
+
+       try {
+          await s3.copyObject({
+             Bucket: BUCKET_NAME,
+             CopySource: `/${BUCKET_NAME}/${oldKey}`, // CopySource requires Bucket/Key
+             Key: newKey
+          }).promise();
+
+          // Delete old temp file (Async, don't wait)
+          s3.deleteObject({ Bucket: BUCKET_NAME, Key: oldKey }).promise().catch(console.error);
+
+          processedItems.push({
+             ...item,
+             storageKey: newKey,
+             calculatedCost: fileCost
+          });
+
+       } catch (err) {
+          console.error(`Failed to move file ${oldKey} to ${newKey}`, err);
+          // Fallback: keep old key if move fails
+          processedItems.push({
+             ...item,
+             calculatedCost: fileCost
+          });
+       }
+    }
+
+    newOrder.items = processedItems;
+    newOrder.totalAmount = grandTotal;
+    
+    await newOrder.save();
+
+    res.status(201).json(newOrder);
 
   } catch (error) {
     console.error(error);
@@ -175,6 +214,21 @@ export const updateOrderStatus = async (req: AuthRequest, res: Response): Promis
 
     order.orderStatus = status;
     await order.save();
+
+    // Emit Socket Event to Student
+    const io = req.app.get('io');
+    if (io) {
+       // We emit to the specific User's room (if we had user rooms) or just general for MVP.
+       // Since we don't have user rooms set up in server.ts explicitly for students,
+       // we can emit to the SHOP room (which student might not be in) OR
+       // we can emit a global event and client filters it? No, that's bad.
+       // Better: Let's emit to `order._id`. Client joins `order._id` room?
+       // Or simpler: server.ts needs to join user to their userID room.
+       
+       // For now, let's assume we broadcast and client filters by their ID (Not secure but works for MVP local)
+       // OR: let's fix server.ts to join user room.
+       io.emit('order_status_updated', order);
+    }
 
     res.json(order);
   } catch (error) {

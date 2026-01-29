@@ -1,37 +1,61 @@
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect, useContext } from 'react';
 import api from '../services/api';
-import toast from 'react-hot-toast';
-import { ArrowLeft, Search, Calendar, Filter } from 'lucide-react';
+import { AuthContext } from '../context/AuthContext';
+import { ArrowLeft, Search, Calendar, Filter, FileText, CheckCircle, XCircle, Clock } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
 const ShopHistory = () => {
   const navigate = useNavigate();
-  const [loading, setLoading] = useState(true);
   const [orders, setOrders] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
   
   // Filters
   const [search, setSearch] = useState('');
-  const [date, setDate] = useState('');
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
+  const [statusFilter, setStatusFilter] = useState('ALL');
+
+  useEffect(() => {
+    fetchHistory();
+  }, [startDate, endDate]); // Refetch on date change
 
   const fetchHistory = async () => {
     setLoading(true);
     try {
-      const params = new URLSearchParams();
-      if (search) params.append('search', search);
-      if (date) params.append('startDate', date);
-      
-      const { data } = await api.get(`/orders/history?${params.toString()}`);
-      setOrders(data);
-    } catch (error) {
-      toast.error('Failed to load history');
+       // Query params
+       const params = new URLSearchParams();
+       if (startDate) params.append('startDate', startDate);
+       if (endDate) params.append('endDate', endDate);
+       if (search) params.append('search', search);
+
+       const { data } = await api.get(`/orders/shop?${params.toString()}`); 
+       // Note: Currently /orders/shop returns all orders sorted by date. 
+       // We might need a dedicated /history endpoint if the list gets huge, 
+       // but for MVP reuse is okay. 
+       // *Correction*: The prompt asked for "history of overall from creation". 
+       // The current `getShopOrders` gets all orders.
+       // We will do client-side filtering for search/status for responsiveness on small datasets.
+       setOrders(data);
+    } catch (e) {
+       console.error(e);
     } finally {
-      setLoading(false);
+       setLoading(false);
     }
   };
 
-  useEffect(() => {
-    fetchHistory();
-  }, []);
+  const filteredOrders = orders.filter(order => {
+     const matchesSearch = 
+        order._id.toLowerCase().includes(search.toLowerCase()) || 
+        order.user?.name.toLowerCase().includes(search.toLowerCase());
+     
+     const matchesStatus = statusFilter === 'ALL' || order.orderStatus === statusFilter;
+
+     return matchesSearch && matchesStatus;
+  });
+
+  const totalRevenue = filteredOrders
+    .filter(o => o.orderStatus !== 'CANCELLED')
+    .reduce((sum, o) => sum + o.totalAmount, 0);
 
   return (
     <div className="min-h-screen bg-slate-50">
@@ -39,78 +63,116 @@ const ShopHistory = () => {
         <button onClick={() => navigate('/shop/dashboard')} className="p-2 hover:bg-slate-100 rounded-full text-slate-500">
           <ArrowLeft size={20} />
         </button>
-        <h1 className="text-xl font-bold text-slate-800">Order History</h1>
+        <div>
+           <h1 className="text-xl font-bold text-slate-800">Order History</h1>
+           <p className="text-xs text-slate-500">Full archive of all transactions</p>
+        </div>
       </header>
 
-      <main className="max-w-6xl mx-auto p-6 space-y-6">
-        {/* Filters */}
-        <div className="bg-white p-4 rounded-xl border border-slate-200 flex flex-col md:flex-row gap-4 items-end md:items-center justify-between">
-           <div className="flex flex-col md:flex-row gap-4 w-full md:w-auto">
-              <div className="relative">
-                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16}/>
-                 <input 
-                   className="input-field pl-10 w-full md:w-64" 
-                   placeholder="Search by Name or Order ID"
-                   value={search}
-                   onChange={e => setSearch(e.target.value)}
-                 />
-              </div>
-              <div className="relative">
-                 <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16}/>
-                 <input 
-                   type="date"
-                   className="input-field pl-10"
-                   value={date}
-                   onChange={e => setDate(e.target.value)}
-                 />
-              </div>
-           </div>
-           <button onClick={fetchHistory} className="btn btn-primary flex items-center gap-2">
-              <Filter size={16} /> Apply Filters
-           </button>
-        </div>
+      <main className="max-w-7xl mx-auto p-6 space-y-6">
+         
+         {/* Filters Bar */}
+         <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col md:flex-row gap-4 items-center justify-between">
+            <div className="flex flex-col md:flex-row gap-4 w-full md:w-auto">
+               <div className="relative">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16}/>
+                  <input 
+                     type="text" 
+                     placeholder="Search Order ID or Name" 
+                     className="input-field pl-10 py-2 text-sm w-full md:w-64"
+                     value={search}
+                     onChange={e => setSearch(e.target.value)}
+                  />
+               </div>
+               
+               <div className="flex items-center gap-2">
+                  <Calendar size={16} className="text-slate-400"/>
+                  <input 
+                     type="date" 
+                     className="input-field py-2 text-sm"
+                     value={startDate}
+                     onChange={e => setStartDate(e.target.value)}
+                  />
+                  <span className="text-slate-400">-</span>
+                  <input 
+                     type="date" 
+                     className="input-field py-2 text-sm"
+                     value={endDate}
+                     onChange={e => setEndDate(e.target.value)}
+                  />
+               </div>
 
-        {/* Table */}
-        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-           <table className="w-full text-left text-sm">
-              <thead className="bg-slate-50 text-slate-500 font-semibold border-b border-slate-100">
-                 <tr>
-                    <th className="p-4">Date</th>
-                    <th className="p-4">Order ID</th>
-                    <th className="p-4">Customer</th>
-                    <th className="p-4">Items</th>
-                    <th className="p-4">Amount</th>
-                    <th className="p-4">Status</th>
-                 </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                 {loading ? (
-                    <tr><td colSpan={6} className="p-8 text-center">Loading...</td></tr>
-                 ) : orders.length === 0 ? (
-                    <tr><td colSpan={6} className="p-8 text-center text-slate-400">No records found.</td></tr>
-                 ) : (
-                    orders.map(order => (
-                       <tr key={order._id} className="hover:bg-slate-50">
-                          <td className="p-4 text-slate-500">{new Date(order.createdAt).toLocaleDateString()}</td>
-                          <td className="p-4 font-mono text-xs">{order._id.slice(-6)}</td>
-                          <td className="p-4 font-medium">{order.user?.name || 'Guest'}</td>
-                          <td className="p-4">{order.items.length} Files</td>
-                          <td className="p-4 font-bold">₹{order.totalAmount}</td>
-                          <td className="p-4">
-                             <span className={`px-2 py-1 rounded text-xs font-bold ${
-                                order.orderStatus === 'COMPLETED' ? 'bg-green-100 text-green-700' :
-                                order.orderStatus === 'CANCELLED' ? 'bg-red-100 text-red-700' :
-                                'bg-yellow-100 text-yellow-700'
-                             }`}>
-                                {order.orderStatus}
-                             </span>
-                          </td>
-                       </tr>
-                    ))
-                 )}
-              </tbody>
-           </table>
-        </div>
+               <select 
+                  className="input-field py-2 text-sm w-full md:w-auto"
+                  value={statusFilter}
+                  onChange={e => setStatusFilter(e.target.value)}
+               >
+                  <option value="ALL">All Status</option>
+                  <option value="COMPLETED">Completed</option>
+                  <option value="CANCELLED">Cancelled</option>
+                  <option value="QUEUED">Queued</option>
+               </select>
+            </div>
+
+            <div className="text-right">
+               <p className="text-xs text-slate-400 font-bold uppercase">Total Revenue (Filtered)</p>
+               <p className="text-2xl font-bold text-slate-800">₹{totalRevenue.toFixed(2)}</p>
+            </div>
+         </div>
+
+         {/* Table */}
+         <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+            <div className="overflow-x-auto">
+               <table className="w-full text-left border-collapse min-w-[800px]">
+                  <thead className="bg-slate-50 text-slate-500 text-xs uppercase font-semibold">
+                     <tr>
+                        <th className="p-4">Date</th>
+                        <th className="p-4">Order ID</th>
+                        <th className="p-4">Customer</th>
+                        <th className="p-4">Details</th>
+                        <th className="p-4">Amount</th>
+                        <th className="p-4">Status</th>
+                     </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                     {loading ? (
+                        <tr><td colSpan={6} className="p-8 text-center text-slate-400">Loading history...</td></tr>
+                     ) : filteredOrders.length === 0 ? (
+                        <tr><td colSpan={6} className="p-8 text-center text-slate-400">No records found.</td></tr>
+                     ) : (
+                        filteredOrders.map(order => (
+                           <tr key={order._id} className="hover:bg-slate-50 transition-colors">
+                              <td className="p-4 text-sm text-slate-600">
+                                 {new Date(order.createdAt).toLocaleDateString()}
+                                 <div className="text-xs text-slate-400">{new Date(order.createdAt).toLocaleTimeString()}</div>
+                              </td>
+                              <td className="p-4 font-mono text-sm text-slate-500">#{order._id.slice(-6)}</td>
+                              <td className="p-4 font-medium text-slate-800">{order.user?.name || 'Guest'}</td>
+                              <td className="p-4 text-sm text-slate-600">
+                                 {order.items.length} Files
+                                 <div className="text-xs text-slate-400 truncate max-w-[200px]">
+                                    {order.items.map((i: any) => i.originalName).join(', ')}
+                                 </div>
+                              </td>
+                              <td className="p-4 font-bold text-slate-800">₹{order.totalAmount}</td>
+                              <td className="p-4">
+                                 <span className={`px-2 py-1 rounded-full text-xs font-bold inline-flex items-center gap-1
+                                    ${order.orderStatus === 'COMPLETED' ? 'bg-green-100 text-green-700' : 
+                                      order.orderStatus === 'CANCELLED' ? 'bg-red-100 text-red-700' : 'bg-yellow-100 text-yellow-700'}
+                                 `}>
+                                    {order.orderStatus === 'COMPLETED' ? <CheckCircle size={12}/> : 
+                                     order.orderStatus === 'CANCELLED' ? <XCircle size={12}/> : <Clock size={12}/>}
+                                    {order.orderStatus}
+                                 </span>
+                              </td>
+                           </tr>
+                        ))
+                     )}
+                  </tbody>
+               </table>
+            </div>
+         </div>
+
       </main>
     </div>
   );

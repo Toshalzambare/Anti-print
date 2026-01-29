@@ -78,6 +78,17 @@ const ShopSetup = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    // Validation
+    if (formData.name.length < 4) {
+       toast.error('Shop name must be at least 4 characters');
+       return;
+    }
+    if (!formData.name || !formData.address || !formData.manualAddress || !imgUrl) {
+       toast.error('All fields and profile image are mandatory');
+       return;
+    }
+
     setLoading(true);
 
     try {
@@ -89,7 +100,7 @@ const ShopSetup = () => {
       });
 
       toast.success("Shop configured successfully!");
-      navigate('/shop/dashboard'); 
+      navigate('/shop/dashboard', { replace: true }); 
 
     } catch (error: any) {
       toast.error(error.response?.data?.message || 'Setup failed');
@@ -111,16 +122,8 @@ const ShopSetup = () => {
       const { data } = await api.post('/upload', uploadData, {
         headers: { 'Content-Type': 'multipart/form-data' }
       });
-      // Construct public URL. 
-      // Note: Backend returns 'location' which is s3 internal URL usually. 
-      // If using MinIO locally, we need to ensure browser can access it.
-      // If 'location' is http://minio:9000/..., browser on localhost can't see 'minio'.
-      // We need to rewrite it to localhost:9000 if dev.
-      let url = data.location;
-      if (url.includes('minio:9000')) {
-         url = url.replace('minio:9000', 'localhost:9000');
-      }
-      setImgUrl(url);
+      // Note: We now store just the KEY so backend can move it.
+      setImgUrl(data.storageKey);
       toast.success('Image uploaded!');
     } catch (err) {
       toast.error('Image upload failed');
@@ -166,7 +169,9 @@ const ShopSetup = () => {
                   <div className="relative">
                      {imgUrl ? (
                         <div className="relative h-10 w-full">
-                           <img src={imgUrl} alt="Preview" className="h-full w-full object-cover rounded-lg" />
+                           <div className="h-full w-full bg-slate-100 rounded-lg flex items-center justify-center text-xs text-green-600 border border-green-200">
+                             Image Selected
+                           </div>
                            <button type="button" onClick={() => setImgUrl('')} className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-0.5"><X size={12}/></button>
                         </div>
                      ) : (

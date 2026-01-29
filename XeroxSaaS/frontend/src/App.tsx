@@ -1,6 +1,7 @@
 import React, { useContext } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import Login from './pages/Login';
+import Landing from './pages/Landing'; // Import Landing
 import RegisterShop from './pages/RegisterShop';
 import RegisterStudent from './pages/RegisterStudent';
 import ShopSetup from './pages/ShopSetup';
@@ -8,6 +9,7 @@ import ShopDashboard from './pages/ShopDashboard';
 import StudentDashboard from './pages/StudentDashboard';
 import { AuthContext } from './context/AuthContext';
 import ShopSettings from './pages/ShopSettings';
+import ShopHistory from './pages/ShopHistory'; // Import History
 
 // Simple Route Protection Component
 const ProtectedRoute = ({ children, allowedRoles }: { children: React.ReactNode, allowedRoles: string[] }) => {
@@ -23,7 +25,7 @@ const ProtectedRoute = ({ children, allowedRoles }: { children: React.ReactNode,
 function App() {
   return (
     <Routes>
-      <Route path="/" element={<Navigate to="/login" replace />} />
+      <Route path="/" element={<Landing />} />
       <Route path="/login" element={<Login />} />
       <Route path="/register-shop" element={<RegisterShop />} />
       <Route path="/register-student" element={<RegisterStudent />} />
@@ -38,6 +40,12 @@ function App() {
       <Route path="/shop/dashboard" element={
         <ProtectedRoute allowedRoles={['OWNER', 'EMPLOYEE']}>
           <ShopDashboard />
+        </ProtectedRoute>
+      } />
+
+      <Route path="/shop/history" element={
+        <ProtectedRoute allowedRoles={['OWNER', 'EMPLOYEE']}>
+          <ShopHistory />
         </ProtectedRoute>
       } />
 

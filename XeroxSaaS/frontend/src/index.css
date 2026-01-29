@@ -6,7 +6,11 @@
 
 body {
   font-family: 'Outfit', sans-serif;
-  @apply bg-white text-slate-900;
+  @apply bg-white text-slate-900 transition-colors duration-300;
+}
+
+.dark body {
+  @apply bg-slate-900 text-white;
 }
 
 /* Custom Button Component using Tailwind */
@@ -19,9 +23,9 @@ body {
 }
 
 .btn-secondary {
-  @apply bg-white border border-slate-200 text-slate-900 hover:bg-slate-50;
+  @apply bg-white border border-slate-200 text-slate-900 hover:bg-slate-50 dark:bg-slate-800 dark:border-slate-700 dark:text-white dark:hover:bg-slate-700;
 }
 
 .input-field {
-  @apply w-full px-4 py-3 bg-white border border-slate-200 rounded-xl focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all;
+  @apply w-full px-4 py-3 bg-white border border-slate-200 rounded-xl focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all dark:bg-slate-800 dark:border-slate-700 dark:text-white;
 }

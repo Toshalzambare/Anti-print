@@ -3,8 +3,8 @@ import AWS from 'aws-sdk';
 import dotenv from 'dotenv';
 import path from 'path';
 
-// 1. Load Env Vars (Root .env)
-const envPath = path.resolve(__dirname, '../../../.env');
+// 1. Load Env Vars (Local .env)
+const envPath = path.resolve(__dirname, '../../.env');
 console.log(`Loading .env from: ${envPath}`);
 dotenv.config({ path: envPath });
 
@@ -35,25 +35,33 @@ const resetDb = async () => {
       signatureVersion: 'v4',
     });
 
-    const bucketName = process.env.MINIO_DEFAULT_BUCKET || 'print-documents';
+    const bucketName = process.env.MINIO_DEFAULT_BUCKET || 'anti-print';
 
     // List all objects
-    const listedObjects = await s3.listObjectsV2({ Bucket: bucketName }).promise();
+    try {
+      const listedObjects = await s3.listObjectsV2({ Bucket: bucketName }).promise();
 
-    if (listedObjects.Contents && listedObjects.Contents.length > 0) {
-      const deleteParams: AWS.S3.DeleteObjectsRequest = {
-        Bucket: bucketName,
-        Delete: { Objects: [] }
-      };
+      if (listedObjects.Contents && listedObjects.Contents.length > 0) {
+        const deleteParams: AWS.S3.DeleteObjectsRequest = {
+          Bucket: bucketName,
+          Delete: { Objects: [] }
+        };
 
-      listedObjects.Contents.forEach(({ Key }) => {
-        if (Key) deleteParams.Delete.Objects.push({ Key });
-      });
+        listedObjects.Contents.forEach(({ Key }) => {
+          if (Key) deleteParams.Delete.Objects.push({ Key });
+        });
 
-      await s3.deleteObjects(deleteParams).promise();
-      console.log(`   ✅ Cleared MinIO Bucket: '${bucketName}' (${listedObjects.Contents.length} files deleted)`);
-    } else {
-      console.log(`   ℹ️  MinIO Bucket '${bucketName}' was already empty.`);
+        await s3.deleteObjects(deleteParams).promise();
+        console.log(`   ✅ Cleared MinIO Bucket: '${bucketName}' (${listedObjects.Contents.length} files deleted)`);
+      } else {
+        console.log(`   ℹ️  MinIO Bucket '${bucketName}' was already empty.`);
+      }
+    } catch (err: any) {
+      if (err.code === 'NoSuchBucket') {
+        console.log(`   ℹ️  MinIO Bucket '${bucketName}' does not exist yet (Skipping cleanup).`);
+      } else {
+        throw err; // Re-throw other errors
+      }
     }
 
     console.log('\n✨ SYSTEM RESET COMPLETE ✨');

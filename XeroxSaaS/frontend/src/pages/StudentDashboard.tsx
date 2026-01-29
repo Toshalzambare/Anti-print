@@ -6,6 +6,9 @@ import toast from 'react-hot-toast';
 import { Store, ShoppingCart, LogOut, FileText, Trash2, Eye, Edit2, MapPin, ArrowRight, Loader2, Info, QrCode, X, ArrowLeft, Clock } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { Html5QrcodeScanner } from 'html5-qrcode';
+import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet';
+import 'leaflet/dist/leaflet.css';
+import { io } from 'socket.io-client';
 
 interface CartItem {
   storageKey: string;
@@ -32,6 +35,7 @@ const StudentDashboard = () => {
   const [cart, setCart] = useState<CartItem[]>([]);
   const [showScanner, setShowScanner] = useState(false);
   const [showOrdersModal, setShowOrdersModal] = useState(false);
+  const [showMap, setShowMap] = useState(false); // New State
   const [myOrders, setMyOrders] = useState<any[]>([]);
 
   // Calculate Distance (Haversine Formula)
@@ -75,12 +79,12 @@ const StudentDashboard = () => {
                  return { ...shop, distance: dist };
               }).sort((a: any, b: any) => a.distance - b.distance);
               
-              setShops(sortedShops);
+              setShops(sortedShops.slice(0, 30)); // Limit to nearest 30
            }, () => {
-              setShops(data);
+              setShops(data.slice(0, 30));
            });
         } else {
-           setShops(data);
+           setShops(data.slice(0, 30));
         }
 
         // Check URL for initial selection
@@ -98,6 +102,32 @@ const StudentDashboard = () => {
       }
     };
     fetchShops();
+  }, []);
+
+  // Socket Listener for Notifications
+  useEffect(() => {
+     const socket = io('http://localhost:5000');
+     
+     socket.on('order_status_updated', (updatedOrder: any) => {
+        // Check if this order belongs to me (simple check by ID in myOrders list, or just toast)
+        // Since we don't have user ID in context easily accessible without prop drilling or context usage...
+        // We can just check if we have this order in 'myOrders' list if it's loaded, 
+        // OR better, we parse the token to get ID?
+        // For MVP, just show toast if it matches one of 'myOrders'.
+        
+        setMyOrders(prev => {
+           const exists = prev.find(o => o._id === updatedOrder._id);
+           if (exists) {
+              if (updatedOrder.orderStatus === 'READY') {
+                 toast.success(`Order #${updatedOrder._id.slice(-4)} is READY for pickup!`, { duration: 5000, icon: '🎉' });
+              }
+              return prev.map(o => o._id === updatedOrder._id ? updatedOrder : o);
+           }
+           return prev;
+        });
+     });
+
+     return () => { socket.disconnect(); };
   }, []);
 
   // Sync back button (popstate)
@@ -285,12 +315,44 @@ const StudentDashboard = () => {
               <p className="text-slate-500">No shops available right now.</p>
             </div>
           ) : (
+            <>
+            <div className="flex justify-end mb-4">
+               <button onClick={() => setShowMap(!showMap)} className="btn btn-outline flex items-center gap-2 text-sm">
+                  <MapPin size={16}/> {showMap ? 'Show List' : 'Show Map'}
+               </button>
+            </div>
+
+            {showMap ? (
+               <div className="h-[600px] rounded-2xl overflow-hidden shadow-lg border border-slate-200 z-0">
+                  <MapContainer center={[20.5937, 78.9629]} zoom={5} style={{ height: '100%', width: '100%' }}>
+                     <TileLayer
+                        attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+                        url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                     />
+                     {shops.map(shop => {
+                        const [lat, lng] = shop.location?.coordinates || [0, 0];
+                        if(lat === 0 && lng === 0) return null;
+                        return (
+                           <Marker key={shop._id} position={[lat, lng]}>
+                              <Popup>
+                                 <div className="min-w-[150px]">
+                                    <h3 className="font-bold">{shop.name}</h3>
+                                    <p className="text-xs text-slate-500 mb-2">{shop.address}</p>
+                                    <button onClick={() => handleSelectShop(shop)} className="btn btn-primary btn-sm w-full">Select</button>
+                                 </div>
+                              </Popup>
+                           </Marker>
+                        )
+                     })}
+                  </MapContainer>
+               </div>
+            ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {shops.map(shop => (
                 <div key={shop._id} className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm hover:shadow-md transition-all cursor-pointer group" onClick={() => handleSelectShop(shop)}>
                   {/* Shop Image if available */}
                   {shop.image ? (
-                     <div className="h-32 w-full bg-cover bg-center rounded-xl mb-4" style={{backgroundImage: `url(${shop.image.replace('minio:9000', 'localhost:9000')})`}} />
+                     <div className="h-32 w-full bg-cover bg-center rounded-xl mb-4" style={{backgroundImage: `url(${shop.image})`}} />
                   ) : (
                      <div className="h-32 w-full bg-slate-100 rounded-xl mb-4 flex items-center justify-center text-slate-300">
                         <Store size={40} />
@@ -329,6 +391,8 @@ const StudentDashboard = () => {
                 </div>
               ))}
             </div>
+            )}
+            </>
           )}
         </main>
         
@@ -423,7 +487,7 @@ const StudentDashboard = () => {
                 Current Shop Rates: <span className="font-bold text-slate-700">B&W ₹{selectedShop.pricing?.bw?.single}</span> / <span className="font-bold text-slate-700">Color ₹{selectedShop.pricing?.color?.single}</span>
               </div>
             </div>
-            <FileUpload onUploadComplete={handleUploadComplete} />
+            <FileUpload onUploadComplete={handleUploadComplete} shopId={selectedShop._id} />
           </div>
 
           <div className="space-y-4">

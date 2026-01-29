@@ -8,7 +8,7 @@ const s3 = new AWS.S3({
   signatureVersion: 'v4',
 });
 
-export const BUCKET_NAME = process.env.MINIO_DEFAULT_BUCKET || 'print-documents';
+export const BUCKET_NAME = process.env.MINIO_DEFAULT_BUCKET || 'anti-print';
 
 // Check if bucket exists, if not, create it (Safety check)
 const initBucket = async () => {

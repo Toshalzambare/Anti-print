@@ -1,6 +1,6 @@
 import dotenv from 'dotenv';
 // Load environment variables BEFORE anything else
-dotenv.config({ path: '../.env' }); // Pointing to the root .env file
+dotenv.config(); // Load from local .env
 
 import express from 'express';
 import cors from 'cors';

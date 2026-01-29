@@ -13,9 +13,10 @@ interface UploadedFile {
 
 interface FileUploadProps {
   onUploadComplete: (files: UploadedFile[]) => void;
+  shopId?: string;
 }
 
-const FileUpload = ({ onUploadComplete }: FileUploadProps) => {
+const FileUpload = ({ onUploadComplete, shopId }: FileUploadProps) => {
   const [isDragging, setIsDragging] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -75,6 +76,9 @@ const FileUpload = ({ onUploadComplete }: FileUploadProps) => {
       for (const file of validFiles) {
         const formData = new FormData();
         formData.append('file', file);
+        if (shopId) {
+           formData.append('shopId', shopId);
+        }
 
         const { data } = await api.post('/upload', formData, {
           headers: { 'Content-Type': 'multipart/form-data' }

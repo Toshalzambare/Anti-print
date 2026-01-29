@@ -24,9 +24,21 @@ export const uploadFile = async (req: MulterRequest, res: Response): Promise<voi
     hashSum.update(fileBuffer);
     const fileHash = hashSum.digest('hex');
 
-    // 2. Generate a unique filename for storage (keep original extension)
+    // 2. Determine Folder Path
     const fileExt = req.file.originalname.split('.').pop();
-    const storageKey = `${uuidv4()}.${fileExt}`;
+    const fileUuid = uuidv4();
+    let storageKey = '';
+
+    const shopId = req.body.shopId;
+
+    if (shopId) {
+       // Temporarily store in shop's temp folder until order is created
+       // Structure: <ShopID>/temp/<UUID>.<ext>
+       storageKey = `${shopId}/temp/${fileUuid}.${fileExt}`;
+    } else {
+       // Fallback or Profile Photos (initially)
+       storageKey = `temp/${fileUuid}.${fileExt}`;
+    }
 
     // 3. Upload to MinIO (S3)
     const params = {
@@ -75,7 +87,8 @@ export const getFileUrl = async (req: Request, res: Response): Promise<void> => 
     const url = await s3.getSignedUrlPromise('getObject', {
       Bucket: BUCKET_NAME,
       Key: storageKey,
-      Expires: 300, 
+      Expires: 300,
+      ResponseContentDisposition: 'inline' // Force Preview
     });
 
     res.json({ url });

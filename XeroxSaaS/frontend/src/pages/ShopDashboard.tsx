@@ -2,13 +2,15 @@ import React, { useContext, useEffect, useState } from 'react';
 import { AuthContext } from '../context/AuthContext';
 import api from '../services/api';
 import toast from 'react-hot-toast';
-import { LayoutDashboard, LogOut, Printer, RefreshCw, CheckCircle, Clock, FileText, Layers, Palette, Power, UserPlus, X, Settings, QrCode } from 'lucide-react';
+import { LayoutDashboard, LogOut, Printer, RefreshCw, CheckCircle, Clock, FileText, Layers, Palette, Power, UserPlus, X, Settings, QrCode, Moon, Sun } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { io } from 'socket.io-client';
 import QRCode from 'react-qr-code';
+import { useTheme } from '../context/ThemeContext';
 
 const ShopDashboard = () => {
   const { user, logout } = useContext(AuthContext)!;
+  const { theme, toggleTheme } = useTheme();
   const navigate = useNavigate();
   
   const [orders, setOrders] = useState<any[]>([]);
@@ -73,7 +75,9 @@ const ShopDashboard = () => {
   const updateStats = (data: any[]) => {
     const pending = data.filter((o: any) => o.orderStatus === 'QUEUED').length;
     const printed = data.filter((o: any) => o.orderStatus === 'COMPLETED').length;
-    const revenue = data.reduce((sum: number, o: any) => sum + (o.totalAmount || 0), 0);
+    const revenue = data
+       .filter((o: any) => o.orderStatus !== 'CANCELLED') // Exclude Cancelled
+       .reduce((sum: number, o: any) => sum + (o.totalAmount || 0), 0);
     setStats({ pending, printed, revenue });
   };
 
@@ -203,7 +207,14 @@ const ShopDashboard = () => {
        const { data } = await api.post('/upload/presigned', { storageKey });
        setPreviewUrl(data.url);
        const ext = originalName.split('.').pop()?.toLowerCase();
-       setPreviewType(['jpg', 'jpeg', 'png', 'gif'].includes(ext || '') ? 'img' : 'pdf');
+       
+       if (['jpg', 'jpeg', 'png', 'gif'].includes(ext || '')) {
+          setPreviewType('img');
+       } else if (ext === 'pdf') {
+          setPreviewType('pdf');
+       } else {
+          setPreviewType('office');
+       }
      } catch (e) { toast.error('Could not load file'); }
   };
 
@@ -241,10 +252,10 @@ const ShopDashboard = () => {
   });
 
   return (
-    <div className="flex h-screen bg-slate-50 relative">
+    <div className="flex h-screen bg-slate-50 dark:bg-slate-900 relative">
       {/* Sidebar */}
-      <aside className="w-64 bg-secondary text-white hidden md:flex flex-col">
-        <div className="p-6 border-b border-slate-700">
+      <aside className="w-64 bg-secondary text-white hidden md:flex flex-col dark:bg-black border-r dark:border-slate-800">
+        <div className="p-6 border-b border-slate-700 dark:border-slate-800">
           <h2 className="text-xl font-bold flex items-center gap-2"><Printer className="text-primary"/> XeroxSaaS</h2>
           <p className="text-xs text-slate-400 mt-1">Partner Portal</p>
         </div>
@@ -252,24 +263,27 @@ const ShopDashboard = () => {
           <div className="flex items-center gap-3 px-4 py-3 bg-white/10 text-primary rounded-xl cursor-pointer">
             <LayoutDashboard size={20} /> Dashboard
           </div>
+          <button onClick={() => navigate('/shop/history')} className="w-full flex items-center gap-3 px-4 py-3 text-slate-400 hover:text-white hover:bg-white/5 rounded-xl transition-colors text-left">
+               <Clock size={20} /> History
+          </button>
           {user?.role === 'OWNER' && (
              <button onClick={() => navigate('/shop/settings')} className="w-full flex items-center gap-3 px-4 py-3 text-slate-400 hover:text-white hover:bg-white/5 rounded-xl transition-colors text-left">
                <Settings size={20} /> Settings
              </button>
           )}
         </nav>
-        <div className="p-4 border-t border-slate-700"><button onClick={() => { logout(); navigate('/login'); }} className="w-full flex items-center gap-2 px-4 py-2 text-sm text-red-400 hover:bg-red-400/10 rounded-lg"><LogOut size={16} /> Logout</button></div>
+        <div className="p-4 border-t border-slate-700 dark:border-slate-800"><button onClick={() => { logout(); navigate('/login'); }} className="w-full flex items-center gap-2 px-4 py-2 text-sm text-red-400 hover:bg-red-400/10 rounded-lg"><LogOut size={16} /> Logout</button></div>
       </aside>
 
       <main className="flex-1 overflow-auto flex flex-col">
         {/* Header */}
-        <header className="bg-white border-b border-slate-200 p-4 md:p-6 flex flex-col md:flex-row justify-between items-start md:items-center sticky top-0 z-10 gap-4">
+        <header className="bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 p-4 md:p-6 flex flex-col md:flex-row justify-between items-start md:items-center sticky top-0 z-10 gap-4">
           <div className="flex justify-between w-full md:w-auto items-center">
             <div>
-              <h1 className="text-lg md:text-2xl font-bold text-slate-800">Shop Dashboard</h1>
+              <h1 className="text-lg md:text-2xl font-bold text-slate-800 dark:text-white">Shop Dashboard</h1>
                {shop && <div className="flex items-center gap-2 text-xs text-slate-500 mt-1">
-                 <span className="bg-slate-100 px-2 py-1 rounded font-mono">ID: {shop._id}</span>
-                 {user?.role === 'OWNER' && <span className="bg-purple-100 text-purple-700 px-2 py-1 rounded font-bold">OWNER</span>}
+                 <span className="bg-slate-100 dark:bg-slate-800 px-2 py-1 rounded font-mono">ID: {shop._id}</span>
+                 {user?.role === 'OWNER' && <span className="bg-purple-100 dark:bg-purple-900 text-purple-700 dark:text-purple-300 px-2 py-1 rounded font-bold">OWNER</span>}
                </div>}
             </div>
             <button onClick={() => { logout(); navigate('/login'); }} className="md:hidden text-slate-500 hover:text-red-500 p-2">
@@ -282,7 +296,7 @@ const ShopDashboard = () => {
                <button 
                  onClick={toggleStatus}
                  className={`flex items-center gap-2 px-3 py-1.5 md:px-4 md:py-2 rounded-lg font-bold transition-all text-xs md:text-sm whitespace-nowrap
-                   ${shop.status === 'OPEN' ? 'bg-green-100 text-green-700 hover:bg-green-200' : 'bg-red-100 text-red-700 hover:bg-red-200'}
+                   ${shop.status === 'OPEN' ? 'bg-green-100 text-green-700 hover:bg-green-200 dark:bg-green-900 dark:text-green-300' : 'bg-red-100 text-red-700 hover:bg-red-200 dark:bg-red-900 dark:text-red-300'}
                  `}
                >
                  <Power size={16} />
@@ -302,60 +316,63 @@ const ShopDashboard = () => {
              </>
 
              <button onClick={fetchOrders} className="p-2 text-slate-500 hover:text-primary-hover"><RefreshCw size={20}/></button>
+             <button onClick={toggleTheme} className="p-2 text-slate-500 hover:text-primary-hover">
+                {theme === 'light' ? <Moon size={20}/> : <Sun size={20}/>}
+             </button>
           </div>
         </header>
 
         <div className="p-6 max-w-7xl mx-auto space-y-8 w-full">
            {/* Stats */}
            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
-              <p className="text-slate-500 text-sm mb-1">Queue Size</p><h3 className="text-3xl font-bold text-slate-900">{stats.pending}</h3>
+            <div className="bg-white dark:bg-slate-800 p-6 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm">
+              <p className="text-slate-500 dark:text-slate-400 text-sm mb-1">Queue Size</p><h3 className="text-3xl font-bold text-slate-900 dark:text-white">{stats.pending}</h3>
             </div>
-            <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
-              <p className="text-slate-500 text-sm mb-1">Completed Today</p><h3 className="text-3xl font-bold text-slate-900">{stats.printed}</h3>
+            <div className="bg-white dark:bg-slate-800 p-6 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm">
+              <p className="text-slate-500 dark:text-slate-400 text-sm mb-1">Completed Today</p><h3 className="text-3xl font-bold text-slate-900 dark:text-white">{stats.printed}</h3>
             </div>
-            <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
-              <p className="text-slate-500 text-sm mb-1">Revenue Estimate</p><h3 className="text-3xl font-bold text-primary-hover">₹{stats.revenue.toFixed(2)}</h3>
+            <div className="bg-white dark:bg-slate-800 p-6 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm">
+              <p className="text-slate-500 dark:text-slate-400 text-sm mb-1">Revenue Estimate</p><h3 className="text-3xl font-bold text-primary-hover">₹{stats.revenue.toFixed(2)}</h3>
             </div>
           </div>
 
           {/* Orders Table with Tabs */}
-          <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-            <div className="p-6 border-b border-slate-100 flex justify-between items-center">
+          <div className="bg-white dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm overflow-hidden">
+            <div className="p-6 border-b border-slate-100 dark:border-slate-700 flex justify-between items-center">
                <div className="flex gap-4">
                   <button 
                     onClick={() => setActiveTab('active')}
-                    className={`text-sm font-bold pb-1 border-b-2 transition-colors ${activeTab === 'active' ? 'text-primary border-primary' : 'text-slate-400 border-transparent hover:text-slate-600'}`}
+                    className={`text-sm font-bold pb-1 border-b-2 transition-colors ${activeTab === 'active' ? 'text-primary border-primary' : 'text-slate-400 border-transparent hover:text-slate-600 dark:hover:text-slate-300'}`}
                   >
                     Queue ({orders.filter(o => ['QUEUED', 'PRINTING', 'READY'].includes(o.orderStatus)).length})
                   </button>
                   <button 
                     onClick={() => setActiveTab('history')}
-                    className={`text-sm font-bold pb-1 border-b-2 transition-colors ${activeTab === 'history' ? 'text-primary border-primary' : 'text-slate-400 border-transparent hover:text-slate-600'}`}
+                    className={`text-sm font-bold pb-1 border-b-2 transition-colors ${activeTab === 'history' ? 'text-primary border-primary' : 'text-slate-400 border-transparent hover:text-slate-600 dark:hover:text-slate-300'}`}
                   >
-                    History
+                    Completed
                   </button>
                </div>
             </div>
             
             <div className="overflow-x-auto">
-              <table className="w-full text-left border-collapse">
-                <thead className="bg-slate-50 text-slate-500 text-xs uppercase font-semibold">
+              <table className="w-full text-left border-collapse min-w-[600px]">
+                <thead className="bg-slate-50 dark:bg-slate-900 text-slate-500 dark:text-slate-400 text-xs uppercase font-semibold">
                   <tr><th className="p-4">Order ID</th><th className="p-4">Student</th><th className="p-4">Files & Config</th><th className="p-4">Status</th><th className="p-4">Action</th></tr>
                 </thead>
-                <tbody className="divide-y divide-slate-100">
+                <tbody className="divide-y divide-slate-100 dark:divide-slate-700">
                   {filteredOrders.length === 0 ? (
                     <tr><td colSpan={5} className="p-8 text-center text-slate-400">No {activeTab} orders.</td></tr>
                   ) : (
                     filteredOrders.map((order) => (
-                      <tr key={order._id} style={{ backgroundColor: getUserColor(order.user?._id) }} className="hover:brightness-95 transition-colors">
-                        <td className="p-4 font-mono text-sm text-slate-500">#{order._id.slice(-6)}</td>
+                      <tr key={order._id} style={{ backgroundColor: theme === 'dark' ? '#1e293b' : getUserColor(order.user?._id) }} className="hover:brightness-95 dark:hover:bg-slate-700 transition-colors dark:text-white">
+                        <td className="p-4 font-mono text-sm text-slate-500 dark:text-slate-400">#{order._id.slice(-6)}</td>
                         <td className="p-4 font-medium">{order.user?.name || 'Guest'}</td>
                         <td className="p-4">
                           <div className="space-y-3">
                             {order.items.map((item: any, idx: number) => (
                               <div key={idx} className="flex flex-col gap-1">
-                                <div className="flex items-center gap-2 font-medium text-slate-700">
+                                <div className="flex items-center gap-2 font-medium text-slate-700 dark:text-slate-200">
                                   <FileText size={16} className="text-slate-400" />
                                   <span className="truncate max-w-[200px]">{item.originalName}</span>
                                   <button 
@@ -365,7 +382,7 @@ const ShopDashboard = () => {
                                     PREVIEW
                                   </button>
                                 </div>
-                                <div className="flex items-center gap-2 text-xs text-slate-500 pl-6">
+                                <div className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400 pl-6">
                                   <span>Range: <b>{item.config.pageRange || 'All'}</b></span>
                                   <span>•</span>
                                   <span>{item.pageCount} Pgs</span>
@@ -377,7 +394,7 @@ const ShopDashboard = () => {
                         </td>
                         <td className="p-4">
                           <span className={`px-3 py-1 rounded-full text-xs font-bold inline-flex items-center gap-1
-                            ${order.orderStatus === 'QUEUED' ? 'bg-yellow-100 text-yellow-700' : 'bg-green-100 text-green-700'}`}>
+                            ${order.orderStatus === 'QUEUED' ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900 dark:text-yellow-300' : 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300'}`}>
                             {order.orderStatus === 'QUEUED' ? <Clock size={12}/> : <CheckCircle size={12}/>}
                             {order.orderStatus}
                           </span>
@@ -385,10 +402,10 @@ const ShopDashboard = () => {
                         <td className="p-4">
                           {order.orderStatus === 'QUEUED' ? (
                             <div className="flex gap-2">
-                              <button onClick={() => markCompleted(order._id)} className="btn bg-slate-900 text-white hover:bg-slate-800 text-xs py-2 px-4 shadow-none flex items-center gap-2">
+                              <button onClick={() => markCompleted(order._id)} className="btn bg-slate-900 dark:bg-white text-white dark:text-slate-900 hover:bg-slate-800 dark:hover:bg-slate-200 text-xs py-2 px-4 shadow-none flex items-center gap-2">
                                 <Printer size={16} /> Print
                               </button>
-                              <button onClick={() => cancelOrder(order._id)} className="btn bg-white text-red-500 border border-red-200 hover:bg-red-50 text-xs py-2 px-3 shadow-none" title="Cancel & Refund">
+                              <button onClick={() => cancelOrder(order._id)} className="btn bg-white dark:bg-slate-800 text-red-500 border border-red-200 dark:border-red-900 hover:bg-red-50 dark:hover:bg-red-900/30 text-xs py-2 px-3 shadow-none" title="Cancel & Refund">
                                 <X size={16} />
                               </button>
                             </div>
@@ -422,11 +439,48 @@ const ShopDashboard = () => {
                    <button onClick={() => setPreviewUrl(null)} className="p-2 hover:bg-slate-200 rounded-lg text-slate-500"><X size={24}/></button>
                 </div>
              </div>
-             <div className="flex-1 bg-slate-100 p-4 flex items-center justify-center overflow-auto">
+             <div className="flex-1 bg-slate-100 p-4 flex items-center justify-center overflow-auto relative">
                 {previewType === 'pdf' ? (
-                   <iframe src={previewUrl} className="w-full h-full rounded-xl bg-white shadow-sm" title="Preview"></iframe>
+                   <iframe 
+                      src={previewUrl} 
+                      className="w-full h-full rounded-xl bg-white shadow-sm" 
+                      title="Preview"
+                      onLoad={(e) => {
+                         // Auto-print attempt
+                         try {
+                            // Note: Cross-Origin restrictions might block this if S3 headers aren't perfect.
+                            // But worth a try for UX.
+                            (e.target as HTMLIFrameElement).contentWindow?.print();
+                         } catch(err) { console.log('Auto-print blocked', err); }
+                      }}
+                   />
+                ) : previewType === 'img' ? (
+                   <img 
+                      src={previewUrl} 
+                      alt="Preview" 
+                      className="max-w-full max-h-full rounded-xl shadow-lg" 
+                      onLoad={() => {
+                         // Auto-print image
+                         const printWindow = window.open('', '_blank', 'width=800,height=600');
+                         if (printWindow) {
+                            printWindow.document.write(`<img src="${previewUrl}" onload="window.print();window.close();" style="width:100%"/>`);
+                            printWindow.document.close();
+                         }
+                      }}
+                   />
                 ) : (
-                   <img src={previewUrl} alt="Preview" className="max-w-full max-h-full rounded-xl shadow-lg" />
+                   // Fallback for Office Docs
+                   <div className="text-center p-8 bg-white rounded-xl shadow-sm border border-slate-200">
+                      <FileText size={48} className="mx-auto text-blue-500 mb-4"/>
+                      <h3 className="text-lg font-bold text-slate-800">Office Document</h3>
+                      <p className="text-slate-500 text-sm mb-6 max-w-xs">
+                         Previews for Word/PowerPoint require a public URL (Google Viewer). 
+                         Please download to print.
+                      </p>
+                      <a href={previewUrl} download className="btn btn-primary w-full flex items-center justify-center gap-2">
+                         <Printer size={18}/> Download & Print
+                      </a>
+                   </div>
                 )}
              </div>
           </div>
@@ -436,22 +490,22 @@ const ShopDashboard = () => {
       {/* 2. Employee Modal */}
       {showEmployeeModal && (
         <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
-          <div className="bg-white w-full max-w-md rounded-2xl p-6 shadow-xl animate-in fade-in zoom-in duration-200">
+          <div className="bg-white dark:bg-slate-800 w-full max-w-md rounded-2xl p-6 shadow-xl animate-in fade-in zoom-in duration-200">
              <div className="flex justify-between items-center mb-6">
-                <h3 className="font-bold text-xl">Add Employee</h3>
+                <h3 className="font-bold text-xl dark:text-white">Add Employee</h3>
                 <button onClick={() => setShowEmployeeModal(false)}><X size={24} className="text-slate-400 hover:text-red-500"/></button>
              </div>
              <form onSubmit={handleAddEmployee} className="space-y-4">
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Name</label>
+                  <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Name</label>
                   <input type="text" required className="input-field" value={empName} onChange={e => setEmpName(e.target.value)} />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Email</label>
+                  <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Email</label>
                   <input type="email" required className="input-field" value={empEmail} onChange={e => setEmpEmail(e.target.value)} />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">Password</label>
+                  <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Password</label>
                   <input type="password" required className="input-field" value={empPass} onChange={e => setEmpPass(e.target.value)} />
                 </div>
                 <button type="submit" className="w-full btn btn-primary flex justify-center items-center gap-2">
