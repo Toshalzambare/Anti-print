@@ -147,13 +147,19 @@ export const updateShop = async (req: AuthRequest, res: Response): Promise<void>
 
 // @desc    Toggle Shop Status (Open/Closed)
 // @route   PUT /api/shops/status
-// @access  Private (Owner)
+// @access  Private (Owner or Employee)
 export const toggleShopStatus = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
-    console.log(`[Toggle] Request from User: ${req.user?._id}`);
-    
-    // 1. Find the current status first
-    const shop = await Shop.findOne({ owner: req.user?._id });
+    console.log(`[Toggle] Request from User: ${req.user?._id}, Role: ${req.user?.role}`);
+
+    // 1. Find the shop - either by owner or by employee's associatedShop
+    let shop;
+    if (req.user?.role === 'OWNER') {
+      shop = await Shop.findOne({ owner: req.user?._id });
+    } else if (req.user?.role === 'EMPLOYEE' && req.user?.associatedShop) {
+      shop = await Shop.findById(req.user.associatedShop);
+    }
+
     if (!shop) {
       console.log('[Toggle] Shop not found for this user');
       res.status(404).json({ message: 'Shop not found' });
@@ -161,14 +167,14 @@ export const toggleShopStatus = async (req: AuthRequest, res: Response): Promise
     }
 
     const newStatus = shop.status === 'OPEN' ? 'CLOSED' : 'OPEN';
-    
+
     // 2. Use findOneAndUpdate to bypass full document validation (safe for legacy data)
-    const updatedShop = await Shop.findOneAndUpdate(
-      { owner: req.user?._id },
+    const updatedShop = await Shop.findByIdAndUpdate(
+      shop._id,
       { $set: { status: newStatus } },
       { new: true }
     );
-    
+
     console.log(`[Toggle] Success: ${shop.status} -> ${newStatus}`);
     res.json(updatedShop);
   } catch (error) {

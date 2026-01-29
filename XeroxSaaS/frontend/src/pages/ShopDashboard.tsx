@@ -183,10 +183,11 @@ const ShopDashboard = () => {
     setToggling(true);
     try {
       const { data } = await api.put('/shops/status');
-      await fetchShopDetails(); 
+      await fetchShopDetails();
       toast.success(data.status === 'OPEN' ? 'Shop is now OPEN' : 'Shop is now CLOSED');
-    } catch (e) { 
-      toast.error('Failed to toggle status'); 
+    } catch (e: any) {
+      console.error('Toggle error:', e.response?.data || e.message);
+      toast.error(e.response?.data?.message || 'Failed to toggle status');
     } finally {
       setToggling(false);
     }
